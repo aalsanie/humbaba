@@ -58,3 +58,5 @@ gradlew buildPlugin
 - Strategy & args validated against tool definition.
 - Binary downloads require pinned official URL + SHA-256 checksum (`BinaryPins.kt`), empty by default.
 
+License
+[license](LICENSE.md)
