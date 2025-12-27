@@ -1,0 +1,54 @@
+<idea-plugin>
+    <id>io.humbaba.formatter</id>
+    <name>Humbaba Formatter</name>
+    <vendor email="a.aalsanie@outlook.com" url="https://plugins.jetbrains.com">Humbaba Formatter</vendor>
+
+    <description><![CDATA[
+        Humbaba Formatter is an intellij plugin that uses the best available formatting capability
+        to format your codebase regardless of the programming language.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationService serviceImplementation="io.humbaba.platform.settings.FormatMasterSettingsService"/>
+        <applicationService serviceImplementation="io.humbaba.platform.IntellijConsentStore"/>
+        <applicationConfigurable instance="io.humbaba.platform.settings.FormatMasterConfigurable"/>
+        <notificationGroup id="Humbaba Formatter" displayType="BALLOON" isLogByDefault="false"/>
+        <toolWindow id="Humbaba Formatter"
+                    factoryClass="io.humbaba.platform.toolwindow.FormatMasterToolWindowFactory"
+                    anchor="right"
+                    icon="/icons/humbaba.svg"
+                    canCloseContents="false"/>
+    </extensions>
+
+    <actions>
+    <group id="HumbabaFormatter.ToolsGroup" text="Humbaba Formatter" popup="true">
+        <add-to-group group-id="ToolsMenu" anchor="last"/>
+        <action id="HumbabaFormatter.FormatAll"
+                class="io.humbaba.platform.action.FormatAllFilesAction"
+                text="Humbaba: Format All Files"
+                description="Format all eligible files in project content using native formatting or safe external formatters"
+                icon="/icons/humbaba.svg"/>
+    </group>
+
+    <action id="HumbabaFormatter.FormatSingle"
+            class="io.humbaba.platform.action.FormatMasterAction"
+            text="Humbaba: Format Single File"
+            description="Format the current file using native formatting or a safe external formatter"
+            icon="/icons/humbaba.svg">
+        <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+    </action>
+
+    <action id="HumbabaFormatter.FormatAll.Popup"
+            class="io.humbaba.platform.action.FormatAllFilesAction"
+            text="Humbaba: Format All Files"
+            description="Format all eligible files in project content using native formatting or safe external formatters"
+            icon="/icons/humbaba.svg">
+        <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+    </action>
+</actions>
+
+
+</idea-plugin>
