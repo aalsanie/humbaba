@@ -1,6 +1,6 @@
 <idea-plugin>
     <id>io.humbaba.formatter</id>
-    <name>Humbaba Formatter</name>
+    <name>Humbaba</name>
     <vendor email="a.aalsanie@outlook.com" url="https://plugins.jetbrains.com">Humbaba Formatter</vendor>
 
     <description><![CDATA[
