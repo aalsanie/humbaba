@@ -1,21 +1,3 @@
-/*
- * Copyright © 2025-2026 | Humbaba is a formatting tool that formats the whole code base using safe strategy.
- *
- * Author: @aalsanie
- *
- * Plugin: https://plugins.jetbrains.com/plugin/29545-humbaba-formatter
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package io.humbaba.formatters
 
 import io.humbaba.domains.model.FormatterDefinition
@@ -49,7 +31,7 @@ class DefaultFormatterRegistry : FormatterRegistry {
             supportedExtensions = setOf("js", "ts", "jsx", "tsx", "json", "css", "html", "md", "yaml", "yml"),
             installStrategies = setOf(InstallStrategyType.NPM),
             allowedArgs = setOf("--write", "--log-level", "warn"),
-            commandTemplate = listOf("{exe}", "--write", "{file}", "--log-level", "warn"),
+            commandTemplate = listOf("{exe}", "{args}", "{file}"),
         )
 
     private fun black() =
@@ -59,7 +41,7 @@ class DefaultFormatterRegistry : FormatterRegistry {
             supportedExtensions = setOf("py"),
             installStrategies = setOf(InstallStrategyType.PIP),
             allowedArgs = setOf("--quiet"),
-            commandTemplate = listOf("{exe}", "--quiet", "{file}"),
+            commandTemplate = listOf("{exe}", "{args}", "{file}"),
         )
 
     private fun ruff() =
@@ -69,7 +51,7 @@ class DefaultFormatterRegistry : FormatterRegistry {
             supportedExtensions = setOf("py"),
             installStrategies = setOf(InstallStrategyType.PIP),
             allowedArgs = setOf("format"),
-            commandTemplate = listOf("{exe}", "format", "{file}"),
+            commandTemplate = listOf("{exe}", "format", "{args}", "{file}"),
         )
 
     private fun gofmt() =
@@ -78,8 +60,8 @@ class DefaultFormatterRegistry : FormatterRegistry {
             displayName = "gofmt",
             supportedExtensions = setOf("go"),
             installStrategies = setOf(InstallStrategyType.GO),
-            allowedArgs = emptySet(),
-            commandTemplate = listOf("{exe}", "-w", "{file}"),
+            allowedArgs = setOf("-w"),
+            commandTemplate = listOf("{exe}", "{args}", "{file}"),
         )
 
     private fun clangFormat() =
@@ -89,7 +71,7 @@ class DefaultFormatterRegistry : FormatterRegistry {
             supportedExtensions = setOf("c", "cc", "cpp", "cxx", "h", "hpp", "hh", "hxx"),
             installStrategies = setOf(InstallStrategyType.BINARY),
             allowedArgs = setOf("-i"),
-            commandTemplate = listOf("{exe}", "-i", "{file}"),
+            commandTemplate = listOf("{exe}", "{args}", "{file}"),
         )
 
     private fun shfmt() =
@@ -99,7 +81,7 @@ class DefaultFormatterRegistry : FormatterRegistry {
             supportedExtensions = setOf("sh", "bash"),
             installStrategies = setOf(InstallStrategyType.BINARY),
             allowedArgs = setOf("-w"),
-            commandTemplate = listOf("{exe}", "-w", "{file}"),
+            commandTemplate = listOf("{exe}", "{args}", "{file}"),
         )
 
     private fun stylua() =
@@ -109,7 +91,7 @@ class DefaultFormatterRegistry : FormatterRegistry {
             supportedExtensions = setOf("lua"),
             installStrategies = setOf(InstallStrategyType.BINARY),
             allowedArgs = setOf("--search-parent-directories"),
-            commandTemplate = listOf("{exe}", "--search-parent-directories", "{file}"),
+            commandTemplate = listOf("{exe}", "{args}", "{file}"),
         )
 
     private fun yamlfmt() =
@@ -118,7 +100,7 @@ class DefaultFormatterRegistry : FormatterRegistry {
             displayName = "yamlfmt",
             supportedExtensions = setOf("yaml", "yml"),
             installStrategies = setOf(InstallStrategyType.GO),
-            allowedArgs = emptySet(),
-            commandTemplate = listOf("{exe}", "-w", "{file}"),
+            allowedArgs = setOf("-w"),
+            commandTemplate = listOf("{exe}", "{args}", "{file}"),
         )
 }

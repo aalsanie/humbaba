@@ -1,83 +1,49 @@
-/*
- * Copyright © 2025-2026 | Humbaba is a formatting tool that formats the whole code base using safe strategy.
- *
- * Author: @aalsanie
- *
- * Plugin: https://plugins.jetbrains.com/plugin/29545-humbaba-formatter
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package io.humbaba.platform
 
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.MessageDialogBuilder
-import com.intellij.openapi.wm.WindowManager
+import com.intellij.openapi.ui.Messages
+import com.intellij.util.concurrency.annotations.RequiresEdt
 import io.humbaba.domains.ports.ConsentPrompter
-import java.awt.Component
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
-class IntellijConsentPrompter(
-    private val project: Project,
-) : ConsentPrompter {
+class IntellijConsentPrompter(private val project: Project) : ConsentPrompter {
 
     override fun askTrustFormatter(formatterId: String, displayName: String): Boolean {
-        // If the project is already disposed, never block or show the UI.
-        if (project.isDisposed) return false
+        val msg =
+            "Humbaba wants to install and run an external formatter:\n\n" +
+                    "• $displayName ($formatterId)\n\n" +
+                    "Safety rules:\n" +
+                    "• Only allow-listed tools\n" +
+                    "• Trusted sources (npm/pip/go or pinned binaries)\n" +
+                    "• No arbitrary commands from AI\n\n" +
+                    "Trust this formatter on this machine?"
 
-        // If we're already on EDT, show directly.
-        if (ApplicationManager.getApplication().isDispatchThread) {
-            return showDialog(displayName)
+        val approved = AtomicBoolean(false)
+
+        val app = ApplicationManager.getApplication()
+        if (app.isDispatchThread) {
+            approved.set(showDialog(msg, formatterId, displayName))
+        } else {
+            app.invokeAndWait {
+                approved.set(showDialog(msg, formatterId, displayName))
+            }
         }
 
-        // Otherwise, hop to EDT and wait for a response.
-        val fut = CompletableFuture<Boolean>()
-        ApplicationManager.getApplication().invokeLater(
-            {
-                if (project.isDisposed) {
-                    fut.complete(false)
-                    return@invokeLater
-                }
-                fut.complete(showDialog(displayName))
-            },
-            ModalityState.any()
-        )
-
-        // Wait for user response (keep it bounded).
-        return try {
-            fut.get(10, TimeUnit.MINUTES)
-        } catch (_: Throwable) {
-            false
-        }
+        return approved.get()
     }
 
-    private fun showDialog(displayName: String): Boolean {
-        val parent: Component? = WindowManager.getInstance().suggestParentWindow(project)
-        return MessageDialogBuilder.yesNo(
-            "Trust external formatter?",
-            """
-            Humbaba needs your approval to install & run an external formatter:
-
-            • $displayName
-
-            This is allow-listed and will run on the current file only.
-
-            Trust this formatter on this machine?
-            """.trimIndent()
-        )
-            .yesText("Trust")
-            .noText("Cancel")
-            .ask(parent)
+    @RequiresEdt
+    private fun showDialog(msg: String, formatterId: String, displayName: String): Boolean {
+        val result =
+            Messages.showYesNoDialog(
+                project,
+                msg,
+                "Trust External Formatter",
+                "Trust & Run",
+                "Cancel",
+                Messages.getWarningIcon(),
+            )
+        return result == Messages.YES
     }
 }

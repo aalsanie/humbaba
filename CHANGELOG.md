@@ -1,6 +1,7 @@
 # Changelog
+- Known bugs: go, c, cpp, shell, cmd formatters are not reliable
 
-## [Unreleased]
+## [Unreleased] 
 
 ## [1.0.1]
 ### Added
