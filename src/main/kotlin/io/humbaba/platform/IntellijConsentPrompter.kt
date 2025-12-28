@@ -11,8 +11,8 @@ class IntellijConsentPrompter(private val project: Project) : ConsentPrompter {
 
     override fun askTrustFormatter(formatterId: String, displayName: String): Boolean {
         val msg =
-            "Humbaba wants to install and run an external formatter:\n\n" +
-                    "Trust this formatter on this machine?"
+            "Humbaba wants to install and run a formatter:\n\n" +
+                    "Download this formatter on this machine?"
 
         val approved = AtomicBoolean(false)
 
@@ -34,10 +34,10 @@ class IntellijConsentPrompter(private val project: Project) : ConsentPrompter {
             Messages.showYesNoDialog(
                 project,
                 msg,
-                "Trust External Formatter",
+                "Download Formatter",
                 "Trust & Run",
                 "Cancel",
-                Messages.getWarningIcon(),
+                Messages.getInformationIcon(),
             )
         return result == Messages.YES
     }

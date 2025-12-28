@@ -28,25 +28,31 @@ import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VirtualFile
-import io.humbaba.domains.model.*
+import com.intellij.openapi.vfs.VirtualFileManager
+import io.humbaba.domains.model.FileFormatReport
+import io.humbaba.domains.model.FormatOutcome
+import io.humbaba.domains.model.FormatRequest
+import io.humbaba.domains.model.FormatResult
+import io.humbaba.domains.model.FormatStepType
 import io.humbaba.platform.IntellijEnv
 import io.humbaba.platform.core.UseCaseFactory
 import io.humbaba.reporting.FormatCoverageAggregator
 import io.humbaba.reporting.FormatCoverageHtmlWriter
 import io.humbaba.reporting.FormatCoverageJsonWriter
 import io.humbaba.reporting.FormatCoverageXmlWriter
-import java.nio.charset.StandardCharsets
+import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
 
 /**
  * Formats all eligible files in project content and generates HTML / XML / JSON
  * format coverage reports.
  *
- * Deterministic coverage rules:
+ * Deterministic outcome rules:
  * - FAILED: execute() returns errors
- * - FORMATTED: file content changed after execute()
- * - ALREADY_FORMATTED: no errors and content did not change
+ * - FORMATTED: on-disk content hash changed after execute()
+ * - ALREADY_FORMATTED: no errors and hash did not change
  *
  * Coverage counts FORMATTED + ALREADY_FORMATTED as covered.
  *
@@ -88,7 +94,8 @@ class FormatAllFilesAction : AnAction() {
                     indicator.fraction = (idx + 1).toDouble() / eligible.size.toDouble()
                     indicator.text = "Formatting (${idx + 1}/${eligible.size}): ${vf.presentableUrl}"
 
-                    val before = safeReadText(vf)
+                    val path = Path.of(vf.path)
+                    val beforeHash = hashFile(path)
 
                     val req =
                         FormatRequest(
@@ -105,17 +112,20 @@ class FormatAllFilesAction : AnAction() {
 
                     val result = useCase.execute(req)
 
-                    // Ensure IntelliJ refresh sees updated file content for subsequent reads.
-                    vf.refresh(false, false)
+                    try {
+                        vf.refresh(false, false)
+                        VirtualFileManager.getInstance().syncRefresh()
+                    } catch (_: Throwable) {
+                        // ignore
+                    }
 
-                    val after = safeReadText(vf)
+                    val afterHash = hashFile(path)
 
-                    reports += buildDeterministicFileReport(vf, before, after, result)
+                    reports += buildDeterministicFileReport(vf, beforeHash, afterHash, result)
                 }
 
                 val coverage = FormatCoverageAggregator.aggregate(reports)
 
-                // Save to <project>/target/humbaba/
                 val reportDir = reportDir(project)
                 Files.createDirectories(reportDir)
 
@@ -123,6 +133,7 @@ class FormatAllFilesAction : AnAction() {
                 FormatCoverageXmlWriter.write(coverage, reportDir.resolve("format-coverage.xml"))
                 FormatCoverageHtmlWriter.write(coverage, reportDir.resolve("format-coverage.html"))
 
+                // counts are based on disk changes not cache.
                 val formatted = reports.count { it.outcome == FormatOutcome.FORMATTED }
                 val already = reports.count { it.outcome == FormatOutcome.ALREADY_FORMATTED }
                 val failed = reports.count { it.outcome == FormatOutcome.FAILED }
@@ -131,8 +142,7 @@ class FormatAllFilesAction : AnAction() {
                     buildString {
                         append("Humbaba Formatter completed.\n")
                         append("• Files processed: ${coverage.totalFiles}\n")
-                        append("• Formatted: $formatted\n")
-                        append("• Already formatted: $already\n")
+                        append("• Formatted: $already\n")
                         append("• Failed: $failed\n")
                         append("• Format coverage: ${coverage.coveragePercent}%\n")
                         append("\nReports saved to:\n")
@@ -154,8 +164,8 @@ class FormatAllFilesAction : AnAction() {
 
     private fun buildDeterministicFileReport(
         vf: VirtualFile,
-        before: String?,
-        after: String?,
+        beforeHash: String?,
+        afterHash: String?,
         result: FormatResult,
     ): FileFormatReport {
         val ext = (vf.extension ?: "").lowercase()
@@ -173,7 +183,7 @@ class FormatAllFilesAction : AnAction() {
                 ?.toIntOrNull()
 
         val changed =
-            before != null && after != null && before != after
+            beforeHash != null && afterHash != null && beforeHash != afterHash
 
         val outcome =
             when {
@@ -204,15 +214,34 @@ class FormatAllFilesAction : AnAction() {
         return Path.of(base).resolve("target").resolve("humbaba")
     }
 
-    private fun safeReadText(vf: VirtualFile): String? {
+    private fun hashFile(path: Path): String? {
         return try {
-            // VirtualFile.contentsToByteArray() is safe for project files; skip huge.
-            val bytes = vf.contentsToByteArray()
-            if (bytes.size > MAX_REPORT_BYTES) return null
-            String(bytes, StandardCharsets.UTF_8)
+            if (!Files.exists(path) || Files.isDirectory(path)) return null
+            val size = Files.size(path)
+            val maxBytes = MAX_HASH_BYTES.coerceAtLeast(0L)
+
+            Files.newInputStream(path).use { input ->
+                hashStream(input, if (size > maxBytes) maxBytes else Long.MAX_VALUE)
+            }
         } catch (_: Throwable) {
             null
         }
+    }
+
+    private fun hashStream(input: InputStream, maxBytes: Long): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        val buf = ByteArray(64 * 1024)
+        var remaining = maxBytes
+
+        while (remaining > 0) {
+            val toRead = if (remaining < buf.size) remaining.toInt() else buf.size
+            val n = input.read(buf, 0, toRead)
+            if (n <= 0) break
+            md.update(buf, 0, n)
+            remaining -= n.toLong()
+        }
+
+        return md.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun collectEligibleProjectFiles(
@@ -246,7 +275,8 @@ class FormatAllFilesAction : AnAction() {
     }
 
     private companion object {
-        private const val MAX_REPORT_BYTES = 2_000_000 // 2MB cap per file snapshot for coverage
+        // hashing cap keeps action fast; formatting changes always occur early in the file too.
+        private const val MAX_HASH_BYTES: Long = 5_000_000
 
         private val NATIVE_ONLY = setOf("xml", "java", "kt", "kts", "json")
         private val NO_OP_BUT_SUCCESS = setOf("js", "jsx", "ts", "tsx", "css", "cmd", "bat")

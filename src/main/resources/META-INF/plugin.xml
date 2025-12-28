@@ -32,13 +32,6 @@
                 icon="/icons/humbaba.svg"/>
     </group>
 
-    <action id="HumbabaFormatter.FormatSingle"
-            class="io.humbaba.platform.action.FormatMasterAction"
-            text="Humbaba: Format Single File"
-            description="Format the current file using native formatting or a safe external formatter"
-            icon="/icons/humbaba.svg">
-        <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-    </action>
 
     <action id="HumbabaFormatter.FormatAll.Popup"
             class="io.humbaba.platform.action.FormatAllFilesAction"
