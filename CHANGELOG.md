@@ -6,9 +6,9 @@
 
 ## [1.0.1]
 ### Added
-- Heuristic coverage scoring system
+- Deterministic and heuristic coverage scoring system
 - AI coverage scoring system
-- Humbaba hybrid coverage scoring system
+- Humbaba hybrid coverage scoring system to apply proper formats in edge cases 
 - Format coverage report generator 
 - Coverage score = `(formatted_files_count / total_files_attempted) * 100`
 - FormatterMaster, engine, and strategy

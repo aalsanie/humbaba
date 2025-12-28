@@ -7,7 +7,7 @@
 
 # Humbaba
 
-Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+AI based formatter that uses a deterministic, heuristic and AI scoring strategy to format the whole project.
 Reports back format coverage percentage in `xml`, `json` and `html` format missing and formated files.
 
 ## Current supported languages & extensions
