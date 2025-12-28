@@ -1,5 +1,6 @@
 /*
- * Copyright © 2025-2026 | Humbaba is a formatting tool that formats the whole code base using safe strategy.
+ * Copyright © 2025-2026 | Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+ * Reports back format coverage percentage
  *
  * Author: @aalsanie
  *
@@ -59,7 +60,6 @@ import java.security.MessageDigest
  * Reports saved to: <project>/target/humbaba/
  */
 class FormatAllFilesAction : AnAction() {
-
     override fun update(e: AnActionEvent) {
         e.presentation.isEnabledAndVisible = e.project != null
     }
@@ -75,10 +75,10 @@ class FormatAllFilesAction : AnAction() {
                     collectEligibleProjectFiles(project) { ext ->
                         val lower = ext.lowercase()
                         lower.isNotBlank() && (
-                                registry.findByExtension(lower).isNotEmpty() ||
-                                        lower in NATIVE_ONLY ||
-                                        lower in NO_OP_BUT_SUCCESS
-                                )
+                            registry.findByExtension(lower).isNotEmpty() ||
+                                lower in NATIVE_ONLY ||
+                                lower in NO_OP_BUT_SUCCESS
+                        )
                     }
 
                 if (eligible.isEmpty()) {
@@ -160,7 +160,7 @@ class FormatAllFilesAction : AnAction() {
         }.queue()
     }
 
-    /* ============================================================ */
+    // ============================================================
 
     private fun buildDeterministicFileReport(
         vf: VirtualFile,
@@ -228,7 +228,10 @@ class FormatAllFilesAction : AnAction() {
         }
     }
 
-    private fun hashStream(input: InputStream, maxBytes: Long): String {
+    private fun hashStream(
+        input: InputStream,
+        maxBytes: Long,
+    ): String {
         val md = MessageDigest.getInstance("SHA-256")
         val buf = ByteArray(64 * 1024)
         var remaining = maxBytes

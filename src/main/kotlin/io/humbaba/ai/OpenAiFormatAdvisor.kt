@@ -1,5 +1,6 @@
 /*
- * Copyright © 2025-2026 | Humbaba is a formatting tool that formats the whole code base using safe strategy.
+ * Copyright © 2025-2026 | Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+ * Reports back format coverage percentage
  *
  * Author: @aalsanie
  *
@@ -38,7 +39,6 @@ class OpenAiFormatAdvisor(
     private val settingsProvider: () -> OpenAiSettings?,
     private val mapper: ObjectMapper = jacksonObjectMapper(),
 ) : AiFormatAdvisor {
-
     override fun score(
         extension: String,
         languageId: String?,
@@ -76,7 +76,10 @@ class OpenAiFormatAdvisor(
         return text.trim().takeIf { it.isNotBlank() }
     }
 
-    private fun send(settings: OpenAiSettings, payload: String): com.fasterxml.jackson.databind.JsonNode? {
+    private fun send(
+        settings: OpenAiSettings,
+        payload: String,
+    ): com.fasterxml.jackson.databind.JsonNode? {
         return runCatching {
             val client =
                 HttpClient

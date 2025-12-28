@@ -1,3 +1,22 @@
+/*
+ * Copyright © 2025-2026 | Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+ * Reports back format coverage percentage
+ *
+ * Author: @aalsanie
+ *
+ * Plugin: https://plugins.jetbrains.com/plugin/29545-humbaba-formatter
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.humbaba.platform
 
 import com.intellij.openapi.application.ApplicationManager
@@ -7,12 +26,16 @@ import com.intellij.util.concurrency.annotations.RequiresEdt
 import io.humbaba.domains.ports.ConsentPrompter
 import java.util.concurrent.atomic.AtomicBoolean
 
-class IntellijConsentPrompter(private val project: Project) : ConsentPrompter {
-
-    override fun askTrustFormatter(formatterId: String, displayName: String): Boolean {
+class IntellijConsentPrompter(
+    private val project: Project,
+) : ConsentPrompter {
+    override fun askTrustFormatter(
+        formatterId: String,
+        displayName: String,
+    ): Boolean {
         val msg =
             "Humbaba wants to install and run a formatter:\n\n" +
-                    "Download this formatter on this machine?"
+                "Download this formatter on this machine?"
 
         val approved = AtomicBoolean(false)
 
@@ -29,7 +52,11 @@ class IntellijConsentPrompter(private val project: Project) : ConsentPrompter {
     }
 
     @RequiresEdt
-    private fun showDialog(msg: String, formatterId: String, displayName: String): Boolean {
+    private fun showDialog(
+        msg: String,
+        formatterId: String,
+        displayName: String,
+    ): Boolean {
         val result =
             Messages.showYesNoDialog(
                 project,

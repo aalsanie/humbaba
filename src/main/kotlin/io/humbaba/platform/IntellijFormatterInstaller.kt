@@ -1,3 +1,22 @@
+/*
+ * Copyright © 2025-2026 | Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+ * Reports back format coverage percentage
+ *
+ * Author: @aalsanie
+ *
+ * Plugin: https://plugins.jetbrains.com/plugin/29545-humbaba-formatter
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.humbaba.platform
 
 import com.intellij.openapi.diagnostic.Logger
@@ -14,7 +33,6 @@ class IntellijFormatterInstaller(
     private val cacheDirProvider: () -> Path,
     private val networkAllowedProvider: () -> Boolean,
 ) : FormatterInstaller {
-
     private val log = Logger.getInstance(IntellijFormatterInstaller::class.java)
 
     override fun ensureInstalled(
@@ -29,26 +47,34 @@ class IntellijFormatterInstaller(
             InstallStrategyType.BINARY -> ensureBinary(def, version)
         }
 
-    private fun ensureNpm(def: FormatterDefinition, version: String): FormatterInstaller.InstallResult {
+    private fun ensureNpm(
+        def: FormatterDefinition,
+        version: String,
+    ): FormatterInstaller.InstallResult {
         val base = cacheDirProvider().resolve("npm").resolve(def.id).resolve(version)
         val binDir = base.resolve("node_modules").resolve(".bin")
 
         val shim =
-            if (isWindows()) binDir.resolve("${def.id}.cmd")
-            else binDir.resolve(def.id)
+            if (isWindows()) {
+                binDir.resolve("${def.id}.cmd")
+            } else {
+                binDir.resolve(def.id)
+            }
 
         if (Files.exists(shim)) return ok("Found ${def.displayName} in cache.", base, shim)
         if (!networkAllowedProvider()) return fail("Network disabled; cannot install ${def.displayName}.")
 
         Files.createDirectories(base)
 
-        val npm = findNpmExecutable()
-            ?: return fail("npm not found. Install Node.js so npm is available on PATH.")
+        val npm =
+            findNpmExecutable()
+                ?: return fail("npm not found. Install Node.js so npm is available on PATH.")
 
         val cmd =
             listOf(
                 npm,
-                "--prefix", base.toString(),
+                "--prefix",
+                base.toString(),
                 "install",
                 "${def.id}@$version",
                 "--silent",
@@ -64,10 +90,16 @@ class IntellijFormatterInstaller(
 
         // Prettier fallback: run as node script when .bin shim isn't created reliably
         if (def.id == "prettier") {
-            val node = findOnPath(if (isWindows()) "node.exe" else "node") ?: findOnPath("node")
-            ?: return fail("node not found on PATH (needed to run prettier).")
+            val node =
+                findOnPath(if (isWindows()) "node.exe" else "node") ?: findOnPath("node")
+                    ?: return fail("node not found on PATH (needed to run prettier).")
 
-            val script = base.resolve("node_modules").resolve("prettier").resolve("bin").resolve("prettier.cjs")
+            val script =
+                base
+                    .resolve("node_modules")
+                    .resolve("prettier")
+                    .resolve("bin")
+                    .resolve("prettier.cjs")
             if (!Files.exists(script)) return fail("Installed but prettier script not found: $script")
 
             // Runner should split by "|" into [node, script]
@@ -76,11 +108,14 @@ class IntellijFormatterInstaller(
 
         return fail(
             "Installed but executable not found. Expected: $shim. " +
-                    "Check if node_modules exists under: $base",
+                "Check if node_modules exists under: $base",
         )
     }
 
-    private fun ensurePip(def: FormatterDefinition, version: String): FormatterInstaller.InstallResult {
+    private fun ensurePip(
+        def: FormatterDefinition,
+        version: String,
+    ): FormatterInstaller.InstallResult {
         val base = cacheDirProvider().resolve("venv").resolve(def.id).resolve(version)
         val venvDir = base.resolve("venv")
         val exe = venvDir.resolve(if (isWindows()) "Scripts/${def.id}.exe" else "bin/${def.id}")
@@ -88,10 +123,11 @@ class IntellijFormatterInstaller(
         if (Files.exists(exe)) return ok("Found ${def.displayName} venv in cache.", base, exe)
         if (!networkAllowedProvider()) return fail("Network disabled; cannot install ${def.displayName}.")
 
-        val py = findOnPath("python3") ?: findOnPath("python")
-        ?: return fail(
-            "python not found on PATH. Install Python (or disable Microsoft Store python alias) to allow auto-install.",
-        )
+        val py =
+            findOnPath("python3") ?: findOnPath("python")
+                ?: return fail(
+                    "python not found on PATH. Install Python (or disable Microsoft Store python alias) to allow auto-install.",
+                )
 
         Files.createDirectories(base)
 
@@ -106,7 +142,10 @@ class IntellijFormatterInstaller(
         return ok("Installed ${def.displayName} via pip.", base, exe)
     }
 
-    private fun ensureGo(def: FormatterDefinition, version: String): FormatterInstaller.InstallResult {
+    private fun ensureGo(
+        def: FormatterDefinition,
+        version: String,
+    ): FormatterInstaller.InstallResult {
         val base = cacheDirProvider().resolve("go").resolve(def.id).resolve(version)
         Files.createDirectories(base)
 
@@ -138,7 +177,10 @@ class IntellijFormatterInstaller(
         return ok("Installed ${def.displayName} via go install.", base, exe)
     }
 
-    private fun ensureBinary(def: FormatterDefinition, version: String): FormatterInstaller.InstallResult {
+    private fun ensureBinary(
+        def: FormatterDefinition,
+        version: String,
+    ): FormatterInstaller.InstallResult {
         // Prefer system binary
         val sys = findOnPath(def.id) ?: (if (!def.id.endsWith(".exe")) findOnPath("${def.id}.exe") else null)
         if (!sys.isNullOrBlank()) {
@@ -152,8 +194,9 @@ class IntellijFormatterInstaller(
 
         if (Files.exists(exe)) return ok("Found ${def.displayName} in cache.", base, exe)
 
-        val pin = BinaryPins.find(def.id, version, platformTag())
-            ?: return fail("Install ${def.displayName} and ensure it is on PATH (auto-download not configured).")
+        val pin =
+            BinaryPins.find(def.id, version, platformTag())
+                ?: return fail("Install ${def.displayName} and ensure it is on PATH (auto-download not configured).")
 
         if (!networkAllowedProvider()) return fail("Network disabled; cannot download ${def.displayName}.")
 
@@ -170,10 +213,17 @@ class IntellijFormatterInstaller(
     // ---------- helpers ----------
 
     private fun findNpmExecutable(): String? =
-        if (isWindows()) findOnPath("npm.cmd") ?: findOnPath("npm")
-        else findOnPath("npm")
+        if (isWindows()) {
+            findOnPath("npm.cmd") ?: findOnPath("npm")
+        } else {
+            findOnPath("npm")
+        }
 
-    private fun runProcess(cmd: List<String>, cwd: File, env: Map<String, String> = emptyMap()): ProcRes =
+    private fun runProcess(
+        cmd: List<String>,
+        cwd: File,
+        env: Map<String, String> = emptyMap(),
+    ): ProcRes =
         try {
             val pb = ProcessBuilder(cmd).directory(cwd)
             env.forEach { (k, v) -> pb.environment()[k] = v }
@@ -193,9 +243,12 @@ class IntellijFormatterInstaller(
             val cmd = if (isWindows()) listOf("where", name) else listOf("which", name)
             val p = ProcessBuilder(cmd).start()
 
-            val lines = p.inputStream.bufferedReader().readLines()
-                .map { it.trim() }
-                .filter { it.isNotBlank() }
+            val lines =
+                p.inputStream
+                    .bufferedReader()
+                    .readLines()
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
 
             val ok = p.waitFor(3, TimeUnit.SECONDS) && p.exitValue() == 0
             if (!ok || lines.isEmpty()) return null
@@ -208,7 +261,6 @@ class IntellijFormatterInstaller(
                 } else {
                     lines.first()
                 }
-
 
             if (isWindows()) {
                 // Prefer cmd shims when `where npm` returns the JS shim
@@ -245,14 +297,19 @@ class IntellijFormatterInstaller(
         return "$os-$normalizedArch"
     }
 
-    private fun ok(msg: String, home: Path, exe: Path) =
-        FormatterInstaller.InstallResult(true, msg, home.toString(), exe.toString())
+    private fun ok(
+        msg: String,
+        home: Path,
+        exe: Path,
+    ) = FormatterInstaller.InstallResult(true, msg, home.toString(), exe.toString())
 
-    private fun fail(msg: String) =
-        FormatterInstaller.InstallResult(false, msg, null, null)
+    private fun fail(msg: String) = FormatterInstaller.InstallResult(false, msg, null, null)
 
-    private fun isWindows(): Boolean =
-        System.getProperty("os.name").lowercase().contains("win")
+    private fun isWindows(): Boolean = System.getProperty("os.name").lowercase().contains("win")
 
-    private data class ProcRes(val exitCode: Int, val stdout: String, val stderr: String)
+    private data class ProcRes(
+        val exitCode: Int,
+        val stdout: String,
+        val stderr: String,
+    )
 }
