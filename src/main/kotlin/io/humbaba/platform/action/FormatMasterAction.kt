@@ -68,7 +68,6 @@ class FormatMasterAction : AnAction() {
 
                 val res = useCase.execute(req)
 
-                // If blocked by trust, offer a simple enablement prompt (global switch).
                 val blocked = res.errors.any { it.contains("not yet trusted", ignoreCase = true) }
                 if (blocked) {
                     ApplicationManager.getApplication().invokeLater {
@@ -122,8 +121,17 @@ Enable external formatter auto-install/runs?""",
         vf: VirtualFile,
     ): String {
         val steps = res.applied.joinToString("\n") { "• ${it.type}: ${it.message}" }
+
+        val warnings =
+            res.applied
+                .filter { !it.ok }
+                .joinToString("\n") { "• ${it.type}: ${it.message}" }
+                .takeIf { it.isNotBlank() }
+                ?.let { "\n\nWarnings:\n$it" }
+                ?: ""
+
         val out = res.output?.let { "\n\nOutput:\n$it" } ?: ""
-        return "Humbaba formatted: ${vf.name}\n\n$steps$out"
+        return "Humbaba formatted: ${vf.name}\n\n$steps$warnings$out"
     }
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT

@@ -12,13 +12,19 @@ class IntellijFileClassifier(private val project: Project) : FileClassifier {
 
     override fun classify(filePath: String): Pair<String, String?> {
         return ReadAction.compute(ThrowableComputable<Pair<String, String?>, RuntimeException> {
-            val vf = LocalFileSystem.getInstance().findFileByPath(filePath)
-                ?: return@ThrowableComputable extOnly(filePath) to null
+            val vf =
+                LocalFileSystem.getInstance().findFileByPath(filePath)
+                    ?: return@ThrowableComputable extOnly(filePath) to null
 
             val ext = (vf.extension ?: "").lowercase()
             val psi = PsiManager.getInstance(project).findFile(vf)
-            val lang = psi?.language?.id
-            ext to lang
+
+            // IntelliJ can report TEXT / TextMate for many file types if the corresponding language plugin isn't installed.
+            // For Humbaba's reporting + deterministic defaults, we normalize languageId based on extension in those cases.
+            val rawLang = psi?.language?.id
+            val normalizedLang = normalizeLanguageId(ext, rawLang)
+
+            ext to normalizedLang
         })
     }
 
@@ -30,6 +36,42 @@ class IntellijFileClassifier(private val project: Project) : FileClassifier {
         val text = runCatching { String(bytes, Charset.defaultCharset()) }.getOrNull() ?: return null
         return text.take(maxChars)
     }
+
+    private fun normalizeLanguageId(ext: String, raw: String?): String? {
+        if (raw == null) return languageFromExtension(ext)
+
+        val lowered = raw.lowercase()
+        val looksGeneric =
+            lowered == "text" ||
+                    lowered == "plaintext" ||
+                    lowered == "textmate" ||
+                    lowered == "unknown" ||
+                    lowered == "generic"
+
+        return if (looksGeneric) languageFromExtension(ext) ?: raw else raw
+    }
+
+    private fun languageFromExtension(ext: String): String? =
+        when (ext.lowercase()) {
+            "kt", "kts" -> "kotlin"
+            "java" -> "java"
+            "xml" -> "xml"
+            "json" -> "json"
+            "yaml", "yml" -> "yaml"
+            "html", "htm" -> "html"
+            "css" -> "css"
+            "js", "jsx" -> "javascript"
+            "ts", "tsx" -> "typescript"
+            "sh", "bash" -> "shell"
+            "py" -> "python"
+            "go" -> "go"
+            "lua" -> "lua"
+            "c" -> "c"
+            "cc", "cpp", "cxx" -> "cpp"
+            "h", "hpp", "hh", "hxx" -> "c/cpp-header"
+            "cmd", "bat" -> "batch"
+            else -> null
+        }
 
     private fun extOnly(path: String): String {
         val i = path.lastIndexOf('.')

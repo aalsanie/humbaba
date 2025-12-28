@@ -1,5 +1,4 @@
 # Changelog
-- Known bugs: go, c, cpp, shell, cmd formatters are not reliable
 
 ## [Unreleased] 
 
@@ -44,7 +43,8 @@
   - Fallbacks reporting and explanation.
 
 ### Fixed
--  `npm` installs using `--prefix` to avoid global state.
--  `python` formatter installation via isolated virtual environments
--  `Go` formatter installation using controlled `GOBIN`
--  Replaced deprecated kotlinOptions with compilerOptions
+- `npm` installs using `--prefix` to avoid global state.
+- `python` formatter installation via isolated virtual environments
+- `Go` formatter installation using controlled `GOBIN`
+- Replaced deprecated kotlinOptions with compilerOptions
+- Fixed bugs in : go, c, cpp, shell, cmd formatters are not being applied due to installation (implemented fallbacks)
