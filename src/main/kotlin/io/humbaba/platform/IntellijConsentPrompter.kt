@@ -12,11 +12,6 @@ class IntellijConsentPrompter(private val project: Project) : ConsentPrompter {
     override fun askTrustFormatter(formatterId: String, displayName: String): Boolean {
         val msg =
             "Humbaba wants to install and run an external formatter:\n\n" +
-                    "• $displayName ($formatterId)\n\n" +
-                    "Safety rules:\n" +
-                    "• Only allow-listed tools\n" +
-                    "• Trusted sources (npm/pip/go or pinned binaries)\n" +
-                    "• No arbitrary commands from AI\n\n" +
                     "Trust this formatter on this machine?"
 
         val approved = AtomicBoolean(false)

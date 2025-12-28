@@ -20,6 +20,7 @@ package io.humbaba.platform.core
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
+import io.humbaba.ai.OpenAiFormatAdvisor
 import io.humbaba.ai.OpenAiRecommender
 import io.humbaba.ai.OpenAiSettings
 import io.humbaba.domains.usecase.FormatMasterUseCase
@@ -47,16 +48,26 @@ object UseCaseFactory {
 
         val apiKey = OpenAiKeyStore.get().ifBlank { System.getenv("OPENAI_API_KEY").orEmpty() }
 
+        val settingsProvider: () -> OpenAiSettings? = {
+            if (!settings.networkAllowed) {
+                null
+            } else {
+                OpenAiSettings(
+                    apiKey = apiKey,
+                    model = settings.openAiModel,
+                    baseUrl = settings.openAiBaseUrl,
+                )
+            }
+        }
+
         val ai =
             OpenAiRecommender(
-                settingsProvider = {
-                    if (!settings.networkAllowed) return@OpenAiRecommender null
-                    OpenAiSettings(
-                        apiKey = apiKey,
-                        model = settings.openAiModel,
-                        baseUrl = settings.openAiBaseUrl,
-                    )
-                },
+                settingsProvider = settingsProvider,
+            )
+
+        val aiAdvisor =
+            OpenAiFormatAdvisor(
+                settingsProvider = settingsProvider,
             )
 
         val registry = DefaultFormatterRegistry()
@@ -76,7 +87,8 @@ object UseCaseFactory {
             FormatMasterUseCase(
                 classifier = classifier,
                 nativeFormatter = nativeFormatter,
-                ai = ai,
+                aiRecommender = ai,
+                aiAdvisor = aiAdvisor,
                 registry = registry,
                 installer = installer,
                 runner = runner,

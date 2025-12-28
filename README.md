@@ -7,8 +7,8 @@
 
 # Humbaba
 
-AI based formatter that uses the best available formatting capability 
-to format the whole project regardless of the programming language and file extension.
+Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+Reports back format coverage percentage in `xml`, `json` and `html` format missing and formated files.
 
 ## Current supported languages & extensions
 - Python

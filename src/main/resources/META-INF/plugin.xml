@@ -4,8 +4,8 @@
     <vendor email="a.aalsanie@outlook.com" url="https://plugins.jetbrains.com">Humbaba Formatter</vendor>
 
     <description><![CDATA[
-        Humbaba: AI based formatter that uses the best available formatting capability
-        to format the whole project
+        Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+        Produces a score report called format coverage in xml, json and html format.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

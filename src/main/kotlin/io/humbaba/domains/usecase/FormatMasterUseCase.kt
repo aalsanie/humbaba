@@ -18,27 +18,14 @@
  */
 package io.humbaba.domains.usecase
 
-import io.humbaba.domains.model.FormatRequest
-import io.humbaba.domains.model.FormatResult
-import io.humbaba.domains.model.FormatStep
-import io.humbaba.domains.model.FormatStepType
-import io.humbaba.domains.model.FormatterDefinition
-import io.humbaba.domains.model.FormatterRecommendation
-import io.humbaba.domains.model.InstallStrategyType
-import io.humbaba.domains.ports.AiRecommender
-import io.humbaba.domains.ports.ConsentPrompter
-import io.humbaba.domains.ports.ConsentStore
-import io.humbaba.domains.ports.FileClassifier
-import io.humbaba.domains.ports.FormatterInstaller
-import io.humbaba.domains.ports.FormatterRegistry
-import io.humbaba.domains.ports.FormatterRunner
-import io.humbaba.domains.ports.NativeFormatter
-import io.humbaba.domains.ports.SafetyPolicy
+import io.humbaba.domains.model.*
+import io.humbaba.domains.ports.*
 
 class FormatMasterUseCase(
     private val classifier: FileClassifier,
     private val nativeFormatter: NativeFormatter,
-    private val ai: AiRecommender,
+    private val aiRecommender: AiRecommender,
+    private val aiAdvisor: AiFormatAdvisor,
     private val registry: FormatterRegistry,
     private val installer: FormatterInstaller,
     private val runner: FormatterRunner,
@@ -46,253 +33,291 @@ class FormatMasterUseCase(
     private val consent: ConsentStore,
     private val consentPrompter: ConsentPrompter,
 ) {
+
     fun execute(requestBase: FormatRequest): FormatResult {
         val steps = mutableListOf<FormatStep>()
-        // Only fatal failures go into errors (i.e., nothing managed to format).
-        // External tool missing / AI unavailable / external exit!=0 are WARNINGS if native formatting succeeds.
         val errors = mutableListOf<String>()
+
+        /* ---------------- CLASSIFY ---------------- */
 
         steps += FormatStep(FormatStepType.CLASSIFY, "Classifying file…")
         val (ext, langId) = classifier.classify(requestBase.filePath)
+        val extension = ext.lowercase()
 
         val request =
             requestBase.copy(
-                extension = ext,
+                extension = extension,
                 languageId = langId,
                 sample = requestBase.sample ?: classifier.sample(requestBase.filePath),
             )
 
         steps += FormatStep(
             FormatStepType.CLASSIFY,
-            "Detected extension .$ext" + (langId?.let { " (language=$it)" } ?: ""),
+            "Detected extension .$extension" + (langId?.let { " (language=$it)" } ?: ""),
         )
 
-        val extLower = ext.lowercase()
+        /* ---------------- POLICIES ---------------- */
 
-        // 1) Always format these with IDE/native only.
         val nativeOnly = setOf("xml", "java", "kt", "kts", "json")
+        val noOpButSuccess = setOf("js", "jsx", "ts", "tsx", "css", "cmd", "bat")
+        val enforceExternalFirst =
+            setOf(
+                "yaml", "yml",
+                "c", "cc", "cpp", "cxx", "h", "hpp", "hh", "hxx",
+                "go",
+            )
 
-        // 2) Explicit no-op but report as formatted.
-        val noOpButReport = setOf("js", "jsx", "ts", "tsx", "css", "cmd", "bat")
+        /* ---------------- NO-OP ---------------- */
 
-        if (extLower in noOpButReport) {
+        if (extension in noOpButSuccess) {
             steps += FormatStep(
-                FormatStepType.NATIVE_FORMAT,
-                "Formatting is disabled for .$extLower by policy (no-op, reported as formatted).",
+                FormatStepType.DONE,
+                "Formatting skipped for .$extension by policy (reported as formatted).",
                 ok = true,
             )
-            steps += FormatStep(FormatStepType.DONE, "Done.", ok = true)
-            return FormatResult(applied = steps, output = null, errors = emptyList())
+            return FormatResult(steps, null, emptyList())
         }
 
-        if (extLower in nativeOnly) {
-            steps += FormatStep(FormatStepType.NATIVE_FORMAT, "Formatting with IDE/native formatter…")
-            val ok = runCatching { nativeFormatter.tryFormat(request.filePath) }.getOrDefault(false)
+        /* ---------------- NATIVE ONLY ---------------- */
+
+        if (extension in nativeOnly) {
+            steps += FormatStep(FormatStepType.NATIVE_FORMAT, "Formatting using IDE/native formatter…")
+            val ok = nativeFormatter.tryFormat(request.filePath)
             if (ok) {
-                steps += FormatStep(FormatStepType.NATIVE_REFORMAT, "Re-running IDE formatter (second pass)…")
-                runCatching { nativeFormatter.tryFormat(request.filePath) }
                 steps += FormatStep(FormatStepType.DONE, "Done.", ok = true)
-                return FormatResult(applied = steps, output = null, errors = emptyList())
+                return FormatResult(steps, null, emptyList())
             }
 
             errors += "IDE/native formatter failed."
             steps += FormatStep(FormatStepType.DONE, "Done.", ok = false)
-            return FormatResult(applied = steps, output = null, errors = errors)
+            return FormatResult(steps, null, errors)
         }
 
-        // External-first for everything else.
-        val external = tryExternal(request, steps)
+        /* ---------------- SNAPSHOT ORIGINAL ---------------- */
 
-        if (external.appliedOk) {
-            steps += FormatStep(FormatStepType.NATIVE_REFORMAT, "Re-running IDE formatter (second pass)…")
-            runCatching { nativeFormatter.tryFormat(request.filePath) }
-            steps += FormatStep(FormatStepType.DONE, "Done.", ok = true)
-            return FormatResult(applied = steps, output = external.output, errors = emptyList())
-        }
+        val original = classifier.sample(request.filePath, maxChars = 200_000) ?: ""
 
-        // Native fallback. If this succeeds → overall success, with warnings present in steps (ok=false).
-        steps += FormatStep(FormatStepType.NATIVE_FORMAT, "Falling back to IDE/native formatter…")
-        val nativeOk = runCatching { nativeFormatter.tryFormat(request.filePath) }.getOrDefault(false)
+        /* ---------------- EXTERNAL FORMAT ---------------- */
 
-        return if (nativeOk) {
-            steps += FormatStep(FormatStepType.DONE, "Done.", ok = true)
-            FormatResult(applied = steps, output = external.output, errors = emptyList())
-        } else {
-            errors += "No formatter succeeded."
-            steps += FormatStep(FormatStepType.DONE, "Done.", ok = false)
-            FormatResult(applied = steps, output = external.output, errors = errors)
-        }
-    }
-
-    private fun tryExternal(
-        request: FormatRequest,
-        steps: MutableList<FormatStep>,
-    ): ExternalAttempt {
-        val candidates = registry.findByExtension(request.extension)
-        if (candidates.isEmpty()) {
-            steps += FormatStep(
-                FormatStepType.AI_RECOMMEND,
-                "No allow-listed external formatter for .${request.extension}; skipping external path.",
-                ok = false,
+        val externalApplied =
+            runExternalFormatter(
+                request = request,
+                steps = steps,
+                forceBest = extension in enforceExternalFirst,
             )
-            return ExternalAttempt(false, null)
-        }
 
-        // Prefer stable tools when multiple candidates exist (yaml/yml has both Prettier and yamlfmt).
-        val chosen = choosePreferred(request.extension, candidates)
+        val afterExternal = classifier.sample(request.filePath, maxChars = 200_000) ?: ""
+        val externalChanged = original != afterExternal && afterExternal.isNotBlank()
 
-        val plan: FormatterRecommendation? =
-            if (request.networkAllowed) {
-                steps += FormatStep(FormatStepType.AI_RECOMMEND, "Requesting formatter recommendation…")
-                runCatching { ai.recommend(request) }.getOrNull()
+        val externalScore =
+            if (externalChanged) {
+                aiAdvisor.score(extension, langId, original, afterExternal)
             } else {
                 null
             }
 
-        val finalPlan =
-            plan ?: run {
-                val msg =
-                    if (request.networkAllowed) {
-                        "AI unavailable; using deterministic allow-listed defaults."
-                    } else {
-                        "Network disabled; using deterministic allow-listed defaults (no AI)."
-                    }
-                steps += FormatStep(FormatStepType.AI_RECOMMEND, msg, ok = false)
+        steps +=
+            FormatStep(
+                FormatStepType.SCORE,
+                "External formatter score: ${externalScore ?: "unavailable"}",
+                ok = (externalScore ?: 0) >= 90,
+            )
 
-                defaultPlanForFormatterId(chosen.id)?.also {
+        if (externalChanged && (externalScore ?: 0) >= 90) {
+            steps += FormatStep(FormatStepType.DONE, "Formatted using external formatter.", ok = true)
+            return FormatResult(steps, null, emptyList())
+        }
+
+        /* ---------------- NATIVE FALLBACK ---------------- */
+
+        steps += FormatStep(
+            FormatStepType.NATIVE_FORMAT,
+            "External formatter insufficient; attempting IDE/native formatter…",
+            ok = false,
+        )
+
+        val nativeOk = nativeFormatter.tryFormat(request.filePath)
+        val afterNative = classifier.sample(request.filePath, maxChars = 200_000) ?: ""
+        val nativeChanged = original != afterNative && afterNative.isNotBlank()
+
+        val nativeScore =
+            if (nativeChanged) {
+                aiAdvisor.score(extension, langId, original, afterNative)
+            } else {
+                null
+            }
+
+        steps +=
+            FormatStep(
+                FormatStepType.SCORE,
+                "Native formatter score: ${nativeScore ?: "unavailable"}",
+                ok = (nativeScore ?: 0) >= 80,
+            )
+
+        /* ---------------- CHOOSE BEST ---------------- */
+
+        val externalWins = (externalScore ?: 0) >= (nativeScore ?: 0)
+
+        when {
+            externalWins && externalChanged && (externalScore ?: 0) >= 80 -> {
+                steps += FormatStep(
+                    FormatStepType.CHOOSE,
+                    "External formatter chosen.",
+                    ok = true,
+                )
+                return FormatResult(steps, null, emptyList())
+            }
+
+            nativeChanged && (nativeScore ?: 0) >= 80 -> {
+                steps += FormatStep(
+                    FormatStepType.CHOOSE,
+                    "Native formatter chosen.",
+                    ok = true,
+                )
+                return FormatResult(steps, null, emptyList())
+            }
+        }
+
+        /* ---------------- AI LAST RESORT ---------------- */
+
+        if (request.networkAllowed) {
+            steps += FormatStep(
+                FormatStepType.AI_FORMAT,
+                "Attempting AI formatting as last resort…",
+                ok = true,
+            )
+
+            val aiFormatted =
+                aiAdvisor.format(extension, langId, original)
+
+            if (!aiFormatted.isNullOrBlank()) {
+                val aiScore = aiAdvisor.score(extension, langId, original, aiFormatted)
+                steps +=
+                    FormatStep(
+                        FormatStepType.SCORE,
+                        "AI formatter score: ${aiScore ?: "unavailable"}",
+                        ok = (aiScore ?: 0) >= 70,
+                    )
+
+                if ((aiScore ?: 0) >= 70) {
+                    // Replace file content
+                    java.nio.file.Files.writeString(
+                        java.nio.file.Path.of(request.filePath),
+                        aiFormatted,
+                    )
+
                     steps += FormatStep(
-                        FormatStepType.AI_RECOMMEND,
-                        "Using '${chosen.displayName}' with safe defaults (no AI).",
+                        FormatStepType.DONE,
+                        "Formatted using AI fallback.",
                         ok = true,
                     )
+                    return FormatResult(steps, null, emptyList())
                 }
             }
+        }
 
-        if (finalPlan == null) {
+
+        /* ---------------- FAILURE ---------------- */
+
+        errors += "File could not be formatted with sufficient confidence."
+        steps += FormatStep(
+            FormatStepType.DONE,
+            "Formatting failed (score below acceptable threshold).",
+            ok = false,
+        )
+        return FormatResult(steps, null, errors)
+    }
+
+    /* TODO: move this out */
+
+    private fun runExternalFormatter(
+        request: FormatRequest,
+        steps: MutableList<FormatStep>,
+        forceBest: Boolean,
+    ): Boolean {
+        val candidates = registry.findByExtension(request.extension)
+        if (candidates.isEmpty()) {
             steps += FormatStep(
                 FormatStepType.AI_RECOMMEND,
-                "No safe deterministic default is configured for '${chosen.id}'.",
+                "No external formatter registered.",
                 ok = false,
             )
-            return ExternalAttempt(false, null)
+            return false
         }
 
-        val validation = safety.validate(chosen, finalPlan)
-        if (!validation.ok) {
-            val msg = "Safety policy rejected recommendation: " + validation.reasons.joinToString("; ")
-            steps += FormatStep(FormatStepType.AI_RECOMMEND, msg, ok = false)
-            return ExternalAttempt(false, null)
-        }
+        val chosen =
+            if (forceBest) chooseBestKnown(request.extension, candidates)
+            else candidates.first()
+
+        steps += FormatStep(
+            FormatStepType.AI_RECOMMEND,
+            "Selected formatter: ${chosen.displayName}",
+        )
+
+        val plan = defaultPlanFor(chosen.id, request.extension) ?: return false
+
+        val validation = safety.validate(chosen, plan)
+        if (!validation.ok) return false
 
         if (!request.allowAutoInstall && !consent.isFormatterTrusted(chosen.id)) {
-            steps += FormatStep(
-                FormatStepType.ENSURE_INSTALLED,
-                "External formatter '${chosen.displayName}' requires approval (ask once).",
-                ok = false,
-            )
-
-            val approved = consentPrompter.askTrustFormatter(chosen.id, chosen.displayName)
-            if (!approved) {
-                steps += FormatStep(
-                    FormatStepType.ENSURE_INSTALLED,
-                    "Formatter '${chosen.displayName}' not trusted.",
-                    ok = false,
-                )
-                return ExternalAttempt(false, null)
-            }
-
+            if (!consentPrompter.askTrustFormatter(chosen.id, chosen.displayName)) return false
             consent.trustFormatter(chosen.id)
-            steps += FormatStep(FormatStepType.ENSURE_INSTALLED, "Trusted '${chosen.displayName}'.", ok = true)
         }
 
-        steps += FormatStep(FormatStepType.ENSURE_INSTALLED, "Ensuring formatter is installed…")
         val install =
             installer.ensureInstalled(
                 chosen,
-                validation.sanitizedVersion ?: finalPlan.version,
-                finalPlan.installStrategy,
+                validation.sanitizedVersion ?: plan.version,
+                plan.installStrategy,
             )
 
-        if (!install.ok) {
-            steps += FormatStep(FormatStepType.ENSURE_INSTALLED, install.message, ok = false)
-            return ExternalAttempt(false, null)
-        }
+        if (!install.ok || install.executable == null) return false
 
-        steps += FormatStep(FormatStepType.ENSURE_INSTALLED, install.message, ok = true)
+        val args = validation.sanitizedArgs.ifEmpty { plan.runArgs }
 
-        steps += FormatStep(FormatStepType.RUN_EXTERNAL_FORMATTER, "Running ${chosen.displayName} on this file…")
         val run =
             runner.run(
-                chosen,
-                install.executable,
-                validation.sanitizedArgs.ifEmpty { finalPlan.runArgs },
-                request.filePath,
+                def = chosen,
+                executable = install.executable,
+                args = args,
+                filePath = request.filePath,
             )
 
-        return if (run.ok) {
-            steps += FormatStep(FormatStepType.RUN_EXTERNAL_FORMATTER, "External formatter applied.", ok = true)
-            ExternalAttempt(true, run.stdout.takeIf { it.isNotBlank() })
-        } else {
-            steps += FormatStep(
-                FormatStepType.RUN_EXTERNAL_FORMATTER,
-                "External formatter failed (exit=${run.exitCode}).",
-                ok = false,
-            )
-            ExternalAttempt(false, run.stdout.takeIf { it.isNotBlank() })
-        }
+        return run.ok
     }
 
-    private fun choosePreferred(extension: String, candidates: List<FormatterDefinition>): FormatterDefinition {
-        val ext = extension.lowercase()
-        val preferredOrder =
-            when (ext) {
-                "yaml", "yml" -> listOf("yamlfmt", "prettier")
-                "py" -> listOf("ruff", "black")
-                else -> emptyList()
+    private fun chooseBestKnown(
+        extension: String,
+        candidates: List<FormatterDefinition>,
+    ): FormatterDefinition {
+        val id =
+            when (extension) {
+                "yaml", "yml" -> "yamlfmt"
+                "go" -> "gofmt"
+                "c", "cc", "cpp", "cxx", "h", "hpp", "hh", "hxx" -> "clang-format"
+                else -> null
             }
 
-        for (preferred in preferredOrder) {
-            val hit = candidates.firstOrNull { it.id.equals(preferred, ignoreCase = true) }
-            if (hit != null) return hit
+        if (id != null) {
+            candidates.firstOrNull { it.id.equals(id, ignoreCase = true) }?.let { return it }
         }
 
-        // Deterministic fallback.
-        return candidates.sortedBy { it.id.lowercase() }.first()
+        return candidates.first()
     }
 
-    private fun defaultPlanForFormatterId(id: String): FormatterRecommendation? =
-        when (id.lowercase()) {
-            "prettier" ->
+    private fun defaultPlanFor(
+        formatterId: String,
+        extension: String,
+    ): FormatterRecommendation? =
+        when (formatterId.lowercase()) {
+            "yamlfmt" ->
                 FormatterRecommendation(
-                    formatterId = "prettier",
-                    version = "3.3.3",
-                    installStrategy = InstallStrategyType.NPM,
-                    runArgs = listOf("--write"),
+                    formatterId = "yamlfmt",
+                    version = "0.13.0",
+                    installStrategy = InstallStrategyType.GO,
+                    runArgs = listOf("-w"),
                     confidence = 1.0,
-                    rationale = "deterministic-default",
-                    sources = emptyList(),
-                )
-
-            "black" ->
-                FormatterRecommendation(
-                    formatterId = "black",
-                    version = "24.8.0",
-                    installStrategy = InstallStrategyType.PIP,
-                    runArgs = emptyList(),
-                    confidence = 1.0,
-                    rationale = "deterministic-default",
-                    sources = emptyList(),
-                )
-
-            "ruff" ->
-                FormatterRecommendation(
-                    formatterId = "ruff",
-                    version = "0.7.0",
-                    installStrategy = InstallStrategyType.PIP,
-                    runArgs = listOf("format"),
-                    confidence = 1.0,
-                    rationale = "deterministic-default",
-                    sources = emptyList(),
+                    rationale = "best-known",
                 )
 
             "gofmt" ->
@@ -300,61 +325,39 @@ class FormatMasterUseCase(
                     formatterId = "gofmt",
                     version = "stable",
                     installStrategy = InstallStrategyType.GO,
-                    runArgs = emptyList(),
-                    confidence = 1.0,
-                    rationale = "deterministic-default",
-                    sources = emptyList(),
-                )
-
-            "shfmt" ->
-                FormatterRecommendation(
-                    formatterId = "shfmt",
-                    version = "3.8.0",
-                    installStrategy = InstallStrategyType.BINARY,
                     runArgs = listOf("-w"),
                     confidence = 1.0,
-                    rationale = "deterministic-default",
-                    sources = emptyList(),
-                )
-
-            "stylua" ->
-                FormatterRecommendation(
-                    formatterId = "stylua",
-                    version = "0.20.0",
-                    installStrategy = InstallStrategyType.BINARY,
-                    runArgs = emptyList(),
-                    confidence = 1.0,
-                    rationale = "deterministic-default",
-                    sources = emptyList(),
+                    rationale = "best-known",
                 )
 
             "clang-format" ->
                 FormatterRecommendation(
                     formatterId = "clang-format",
-                    version = "17.0.6",
+                    version = "17",
                     installStrategy = InstallStrategyType.BINARY,
-                    runArgs = emptyList(),
+                    runArgs = listOf("-i"),
                     confidence = 1.0,
-                    rationale = "deterministic-default",
-                    sources = emptyList(),
+                    rationale = "best-known",
                 )
 
-            "yamlfmt" ->
+            "prettier" -> {
+                val args =
+                    when (extension) {
+                        "html", "htm" -> listOf("--write", "--parser=html")
+                        "yaml", "yml" -> listOf("--write", "--parser=yaml")
+                        else -> listOf("--write")
+                    }
+
                 FormatterRecommendation(
-                    formatterId = "yamlfmt",
-                    version = "0.13.0",
-                    installStrategy = InstallStrategyType.GO,
-                    runArgs = emptyList(),
+                    formatterId = "prettier",
+                    version = "3.3.3",
+                    installStrategy = InstallStrategyType.NPM,
+                    runArgs = args,
                     confidence = 1.0,
-                    rationale = "deterministic-default",
-                    sources = emptyList(),
+                    rationale = "deterministic",
                 )
+            }
 
             else -> null
         }
-
-    private data class ExternalAttempt(
-        val appliedOk: Boolean,
-        val output: String?,
-    )
 }

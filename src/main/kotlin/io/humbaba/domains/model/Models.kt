@@ -48,7 +48,12 @@ enum class FormatStepType {
     AI_RECOMMEND,
     ENSURE_INSTALLED,
     RUN_EXTERNAL_FORMATTER,
-    NATIVE_REFORMAT,
+    /** AI or heuristic scoring for candidate outputs. */
+    SCORE,
+    /** AI-based formatting fallback. */
+    AI_FORMAT,
+    /** Internal decision step: choosing the best candidate output. */
+    CHOOSE,
     DONE,
 }
 

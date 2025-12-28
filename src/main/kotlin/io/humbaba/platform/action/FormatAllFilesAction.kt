@@ -28,29 +28,51 @@ import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VirtualFile
-import io.humbaba.domains.model.FormatRequest
+import io.humbaba.domains.model.*
 import io.humbaba.platform.IntellijEnv
 import io.humbaba.platform.core.UseCaseFactory
+import io.humbaba.reporting.FormatCoverageAggregator
+import io.humbaba.reporting.FormatCoverageHtmlWriter
+import io.humbaba.reporting.FormatCoverageJsonWriter
+import io.humbaba.reporting.FormatCoverageXmlWriter
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
 
 /**
- * Tools / Popup action: format all eligible files in the *project content* (excludes libraries/excluded dirs).
- * Uses the same pipeline as single-file format:
- *   native formatter -> AI allow-listed recommendation -> safe install -> run -> refresh -> optional native pass.
+ * Formats all eligible files in project content and generates HTML / XML / JSON
+ * format coverage reports.
+ *
+ * Deterministic coverage rules:
+ * - FAILED: execute() returns errors
+ * - FORMATTED: file content changed after execute()
+ * - ALREADY_FORMATTED: no errors and content did not change
+ *
+ * Coverage counts FORMATTED + ALREADY_FORMATTED as covered.
+ *
+ * Reports saved to: <project>/target/humbaba/
  */
 class FormatAllFilesAction : AnAction() {
+
     override fun update(e: AnActionEvent) {
         e.presentation.isEnabledAndVisible = e.project != null
     }
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
+
         object : Task.Backgroundable(project, "Humbaba: format all files", true) {
             override fun run(indicator: ProgressIndicator) {
                 val (useCase, settings, registry) = UseCaseFactory.build(project)
 
                 val eligible =
                     collectEligibleProjectFiles(project) { ext ->
-                        ext.isNotBlank() && registry.findByExtension(ext).isNotEmpty()
+                        val lower = ext.lowercase()
+                        lower.isNotBlank() && (
+                                registry.findByExtension(lower).isNotEmpty() ||
+                                        lower in NATIVE_ONLY ||
+                                        lower in NO_OP_BUT_SUCCESS
+                                )
                     }
 
                 if (eligible.isEmpty()) {
@@ -58,14 +80,15 @@ class FormatAllFilesAction : AnAction() {
                     return
                 }
 
-                var okCount = 0
-                var failCount = 0
-                val failures = mutableListOf<String>()
+                val reports = mutableListOf<FileFormatReport>()
 
                 eligible.forEachIndexed { idx, vf ->
                     if (indicator.isCanceled) return
-                    indicator.fraction = (idx.toDouble() / eligible.size.toDouble()).coerceIn(0.0, 1.0)
+
+                    indicator.fraction = (idx + 1).toDouble() / eligible.size.toDouble()
                     indicator.text = "Formatting (${idx + 1}/${eligible.size}): ${vf.presentableUrl}"
+
+                    val before = safeReadText(vf)
 
                     val req =
                         FormatRequest(
@@ -80,36 +103,116 @@ class FormatAllFilesAction : AnAction() {
                             networkAllowed = settings.networkAllowed,
                         )
 
-                    val res = useCase.execute(req)
+                    val result = useCase.execute(req)
+
+                    // Ensure IntelliJ refresh sees updated file content for subsequent reads.
                     vf.refresh(false, false)
 
-                    if (res.errors.isEmpty()) {
-                        okCount++
-                    } else {
-                        failCount++
-                        failures += "${vf.name}: ${res.errors.firstOrNull() ?: "unknown error"}"
-                        if (failures.size >= 20) {
-                            // Prevent huge notifications; keep first 20 failures.
-                            return@forEachIndexed
-                        }
-                    }
+                    val after = safeReadText(vf)
+
+                    reports += buildDeterministicFileReport(vf, before, after, result)
                 }
+
+                val coverage = FormatCoverageAggregator.aggregate(reports)
+
+                // Save to <project>/target/humbaba/
+                val reportDir = reportDir(project)
+                Files.createDirectories(reportDir)
+
+                FormatCoverageJsonWriter.write(coverage, reportDir.resolve("format-coverage.json"))
+                FormatCoverageXmlWriter.write(coverage, reportDir.resolve("format-coverage.xml"))
+                FormatCoverageHtmlWriter.write(coverage, reportDir.resolve("format-coverage.html"))
+
+                val formatted = reports.count { it.outcome == FormatOutcome.FORMATTED }
+                val already = reports.count { it.outcome == FormatOutcome.ALREADY_FORMATTED }
+                val failed = reports.count { it.outcome == FormatOutcome.FAILED }
 
                 val msg =
                     buildString {
                         append("Humbaba Formatter completed.\n")
-                        append("• Eligible files: ${eligible.size}\n")
-                        append("• Success: $okCount\n")
-                        append("• Failed: $failCount\n")
-                        if (failures.isNotEmpty()) {
-                            append("\nFailures (first ${failures.size}):\n")
-                            failures.forEach { append("• ").append(it).append("\n") }
-                        }
+                        append("• Files processed: ${coverage.totalFiles}\n")
+                        append("• Formatted: $formatted\n")
+                        append("• Already formatted: $already\n")
+                        append("• Failed: $failed\n")
+                        append("• Format coverage: ${coverage.coveragePercent}%\n")
+                        append("\nReports saved to:\n")
+                        append("• ${reportDir.resolve("format-coverage.html")}\n")
+                        append("• ${reportDir.resolve("format-coverage.json")}\n")
+                        append("• ${reportDir.resolve("format-coverage.xml")}\n")
                     }.trim()
 
-                notify(project, msg, if (failCount == 0) NotificationType.INFORMATION else NotificationType.WARNING)
+                notify(
+                    project,
+                    msg,
+                    if (failed == 0) NotificationType.INFORMATION else NotificationType.WARNING,
+                )
             }
         }.queue()
+    }
+
+    /* ============================================================ */
+
+    private fun buildDeterministicFileReport(
+        vf: VirtualFile,
+        before: String?,
+        after: String?,
+        result: FormatResult,
+    ): FileFormatReport {
+        val ext = (vf.extension ?: "").lowercase()
+
+        val formatterChosen =
+            result.applied.firstOrNull { it.type == FormatStepType.CHOOSE }?.message
+                ?: result.applied.firstOrNull { it.type == FormatStepType.AI_RECOMMEND && it.message.contains("Selected") }?.message
+                ?: result.applied.firstOrNull { it.type == FormatStepType.RUN_EXTERNAL_FORMATTER }?.message
+
+        val score =
+            result.applied
+                .lastOrNull { it.type == FormatStepType.SCORE }
+                ?.message
+                ?.filter { it.isDigit() }
+                ?.toIntOrNull()
+
+        val changed =
+            before != null && after != null && before != after
+
+        val outcome =
+            when {
+                result.errors.isNotEmpty() -> FormatOutcome.FAILED
+                changed -> FormatOutcome.FORMATTED
+                else -> FormatOutcome.ALREADY_FORMATTED
+            }
+
+        val notes =
+            when {
+                result.errors.isNotEmpty() -> result.errors.joinToString("; ")
+                changed -> "Content changed."
+                else -> "No change detected (already formatted)."
+            }
+
+        return FileFormatReport(
+            filePath = vf.path,
+            extension = ext,
+            outcome = outcome,
+            chosenFormatter = formatterChosen,
+            score = score,
+            notes = notes,
+        )
+    }
+
+    private fun reportDir(project: Project): Path {
+        val base = project.basePath ?: "."
+        return Path.of(base).resolve("target").resolve("humbaba")
+    }
+
+    private fun safeReadText(vf: VirtualFile): String? {
+        return try {
+            // VirtualFile.contentsToByteArray() is safe for project files; skip huge.
+            val bytes = vf.contentsToByteArray()
+            if (bytes.size > MAX_REPORT_BYTES) return null
+            String(bytes, StandardCharsets.UTF_8)
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     private fun collectEligibleProjectFiles(
@@ -140,5 +243,12 @@ class FormatAllFilesAction : AnAction() {
     ) {
         val group = NotificationGroupManager.getInstance().getNotificationGroup("Humbaba Formatter")
         group.createNotification(message, type).notify(project)
+    }
+
+    private companion object {
+        private const val MAX_REPORT_BYTES = 2_000_000 // 2MB cap per file snapshot for coverage
+
+        private val NATIVE_ONLY = setOf("xml", "java", "kt", "kts", "json")
+        private val NO_OP_BUT_SUCCESS = setOf("js", "jsx", "ts", "tsx", "css", "cmd", "bat")
     }
 }

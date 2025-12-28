@@ -41,6 +41,35 @@ interface AiRecommender {
     fun recommend(request: FormatRequest): FormatterRecommendation?
 }
 
+/**
+ * Optional AI helper for:
+ *  - scoring whether a candidate output looks properly formatted
+ *  - producing a formatted output as a last resort
+ *
+ * Implementations MUST be best-effort and return null when unavailable.
+ */
+interface AiFormatAdvisor {
+    /** Return a 0-100 score;
+     * rules: 90+ score
+     * 80+ score accepted on rerun
+     * 70+ rely on AI
+     * if less then DON't format
+     */
+    fun score(
+        extension: String,
+        languageId: String?,
+        original: String,
+        candidate: String,
+    ): Int?
+
+    /** Return formatted text for the given content, or null if unavailable. */
+    fun format(
+        extension: String,
+        languageId: String?,
+        content: String,
+    ): String?
+}
+
 interface FormatterRegistry {
     fun findById(id: String): FormatterDefinition?
 

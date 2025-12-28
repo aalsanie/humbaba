@@ -4,6 +4,11 @@
 
 ## [1.0.1]
 ### Added
+- Heuristic coverage scoring system
+- AI coverage scoring system
+- Humbaba hybrid coverage scoring system
+- Format coverage report generator 
+- Coverage score = `(formatted_files_count / total_files_attempted) * 100`
 - FormatterMaster, engine, and strategy
   - OpenAI-based formatter recommendation.
   - Native IDE formatter used only as a fallback.
