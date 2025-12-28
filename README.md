@@ -2,7 +2,7 @@
   <img src="assets/humbaba.svg" alt="Humbaba Logo" width="180"/>
 </p>
 
-[![current release](https://img.shields.io/badge/release-0.3.0-green)](https://github.com/aalsanie/shamash/releases) | [![install plugin](https://img.shields.io/badge/jetbrains-plugin-red)](https://plugins.jetbrains.com/plugin/29545-humbaba-formatter) | [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
+[![current release](https://img.shields.io/badge/release-0.3.0-green)](https://github.com/aalsanie/shamash/releases) | [![install plugin](https://img.shields.io/badge/jetbrains-plugin-red)](https://plugins.jetbrains.com/plugin/29549-humbaba) | [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
 
 # Humbaba
