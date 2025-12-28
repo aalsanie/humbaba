@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased] 
+### Fixed
+- Upgrade gradle to 8.13 and use `intellij.platform`
 
 ## [1.0.1]
 ### Added
