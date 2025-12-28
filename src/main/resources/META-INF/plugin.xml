@@ -4,8 +4,8 @@
     <vendor email="a.aalsanie@outlook.com" url="https://plugins.jetbrains.com">Humbaba Formatter</vendor>
 
     <description><![CDATA[
-        Humbaba Formatter is an intellij plugin that uses the best available formatting capability
-        to format your codebase regardless of the programming language.
+        Humbaba: AI based formatter that uses the best available formatting capability
+        to format the whole project
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

@@ -16,20 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.humbaba.platform.settings
+package io.humbaba.domains.ports
 
-data class FormatMasterSettings(
-    var preferExistingFormatterFirst: Boolean = true,
-    var allowExternalAutoInstall: Boolean = false,
-    var networkAllowed: Boolean = true,
-    var cacheDir: String = defaultCacheDir(),
-    var openAiModel: String = "gpt-5.2-mini",
-    var openAiBaseUrl: String = "https://api.openai.com",
-) {
-    companion object {
-        fun defaultCacheDir(): String {
-            val home = System.getProperty("user.home") ?: "."
-            return "$home/.humbaba"
-        }
-    }
+interface ConsentPrompter {
+    /**
+     * Ask the user to trust a formatter (persist trust if approved).
+     * @return true if user approved, false otherwise.
+     */
+    fun askTrustFormatter(
+        formatterId: String,
+        displayName: String,
+    ): Boolean
 }

@@ -3,7 +3,7 @@
  *
  * Author: @aalsanie
  *
- * Plugin: TODO: REPLACEME
+ * Plugin: https://plugins.jetbrains.com/plugin/29545-humbaba-formatter
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -20,6 +20,7 @@ package io.humbaba.platform.action
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
@@ -124,6 +125,8 @@ Enable external formatter auto-install/runs?""",
         val out = res.output?.let { "\n\nOutput:\n$it" } ?: ""
         return "Humbaba formatted: ${vf.name}\n\n$steps$out"
     }
+
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
     private fun buildFailure(
         res: io.humbaba.domains.model.FormatResult,

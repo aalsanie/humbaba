@@ -3,7 +3,7 @@
  *
  * Author: @aalsanie
  *
- * Plugin: TODO: REPLACEME
+ * Plugin: https://plugins.jetbrains.com/plugin/29545-humbaba-formatter
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -95,8 +95,9 @@ interface FormatterRunner {
 interface ConsentStore {
     fun isFormatterTrusted(formatterId: String): Boolean
 
-    fun markFormatterTrusted(
-        formatterId: String,
-        trusted: Boolean,
-    )
+    fun trustFormatter(formatterId: String)
+
+    fun untrustFormatter(formatterId: String)
+
+    fun trustedFormatters(): Set<String>
 }

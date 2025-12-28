@@ -2,16 +2,27 @@
   <img src="assets/humbaba.svg" alt="Humbaba Logo" width="180"/>
 </p>
 
-[![current release](https://img.shields.io/badge/release-0.3.0-green)](https://github.com/aalsanie/shamash/releases) | [![install plugin](https://img.shields.io/badge/jetbrains-plugin-red)](# TODO: REPLACE ME) | [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
+[![current release](https://img.shields.io/badge/release-0.3.0-green)](https://github.com/aalsanie/shamash/releases) | [![install plugin](https://img.shields.io/badge/jetbrains-plugin-red)](https://plugins.jetbrains.com/plugin/29545-humbaba-formatter) | [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
 
 # Humbaba
 
-Humbaba Formatter is an intellij plugin that uses the best available formatting capability 
-to format your codebase regardless of the programming language.
+AI based formatter that uses the best available formatting capability 
+to format the whole project regardless of the programming language and file extension.
+
+## Current supported languages & extensions
+- Python
+- C
+- C++
+- Shell
+- Go
+- Lua
+- Java
+- Kotlin
+- (JS/TS/JSON/CSS/HTML/Markdown/YAML)
 
 ## Usage
-- Important: export your open api key or save it using password save
+- Export your open api key or save it using password save
 - Go to: Settings / Preferences → Tools → Humbaba Formatter (your plugin settings page)
 - Paste your OpenAI key in the OpenAI API Key field
 - Click Save Key
@@ -38,9 +49,10 @@ gradlew.bat spotlessApply
 gradlew runIde
 ```
 
-Build
+Build & Verify
 
 ```bash
+gradlew runPluginVerifier
 gradlew buildPlugin
 ```
 

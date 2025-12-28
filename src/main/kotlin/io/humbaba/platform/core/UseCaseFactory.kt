@@ -3,7 +3,7 @@
  *
  * Author: @aalsanie
  *
- * Plugin: TODO: REPLACEME
+ * Plugin: https://plugins.jetbrains.com/plugin/29545-humbaba-formatter
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -25,6 +25,7 @@ import io.humbaba.ai.OpenAiSettings
 import io.humbaba.domains.usecase.FormatMasterUseCase
 import io.humbaba.formatters.DefaultFormatterRegistry
 import io.humbaba.formatters.DefaultSafetyPolicy
+import io.humbaba.platform.IntellijConsentPrompter
 import io.humbaba.platform.IntellijConsentStore
 import io.humbaba.platform.IntellijFileClassifier
 import io.humbaba.platform.IntellijFormatterInstaller
@@ -60,12 +61,16 @@ object UseCaseFactory {
 
         val registry = DefaultFormatterRegistry()
         val safety = DefaultSafetyPolicy()
+
         val installer =
             IntellijFormatterInstaller(
                 cacheDirProvider = { Path.of(settings.cacheDir) },
                 networkAllowedProvider = { settings.networkAllowed },
             )
+
         val runner = IntellijFormatterRunner()
+
+        val consentPrompter = IntellijConsentPrompter(project)
 
         val useCase =
             FormatMasterUseCase(
@@ -77,6 +82,7 @@ object UseCaseFactory {
                 runner = runner,
                 safety = safety,
                 consent = consentStore,
+                consentPrompter = consentPrompter,
             )
 
         return Triple(useCase, settings, registry)

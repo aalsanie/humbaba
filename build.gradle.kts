@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "io.humbaba"
-version = "1.0.0"
+version = "1.0.1"
 
 repositories {
     mavenCentral()
@@ -25,13 +25,21 @@ dependencies {
 }
 
 tasks.withType<KotlinCompile>().configureEach {
-    kotlinOptions.jvmTarget = "17"
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
 }
 
 tasks {
     patchPluginXml {
-        sinceBuild.set("242")
-        untilBuild.set("")
+        sinceBuild.set("233")
+        untilBuild.set("252.*")
+    }
+}
+
+tasks {
+    runPluginVerifier {
+        ideVersions.set(listOf("2023.3", "2024.1", "2024.2", "2024.3"))
     }
 }
 

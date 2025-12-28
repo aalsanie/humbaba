@@ -3,7 +3,7 @@
  *
  * Author: @aalsanie
  *
- * Plugin: TODO: REPLACEME
+ * Plugin: https://plugins.jetbrains.com/plugin/29545-humbaba-formatter
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -24,6 +24,12 @@ import io.humbaba.domains.ports.FormatterRunner
 import java.io.File
 import java.util.concurrent.TimeUnit
 
+/**
+ * Runs external formatters in a safe, cross-platform way.
+ *
+ * Note: installer may encode "node|<scriptPath>" (or similar) into `executable` to support tools
+ * that don't expose a reliable .bin shim on Windows. We support that encoding here.
+ */
 class IntellijFormatterRunner : FormatterRunner {
     private val log = Logger.getInstance(IntellijFormatterRunner::class.java)
 
@@ -33,96 +39,50 @@ class IntellijFormatterRunner : FormatterRunner {
         args: List<String>,
         filePath: String,
     ): FormatterRunner.RunResult {
-        // executable may be:
-        //  - null -> use def.id
-        //  - "C:\path\prettier.cmd"
-        //  - "C:\path\node.exe|C:\path\prettier.cjs"  (node + script)
         val exeSpec = (executable ?: def.id).trim()
 
-        val (exe, prefixArgs) = parseExeSpec(exeSpec)
+        // Support encoded executable like: "node|C:\path\to\script.js"
+        val parts = exeSpec.split("|", limit = 2)
+        val exe = parts[0]
+        val prefixArg = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
 
-        // Build the final command.
-        // Prefer def.commandTemplate if present, otherwise: exe + prefixArgs + args + filePath
-        val finalCmd: List<String> =
-            if (def.commandTemplate.isNotEmpty()) {
-                // Template supports:
-                //  {exe} -> exe
-                //  {file} -> filePath
-                //  {args} -> expanded args (zero or more tokens)
-                // plus optional prefixArgs injected immediately after {exe} if {exe} exists
-                expandTemplate(def.commandTemplate, exe, prefixArgs, args, filePath)
-            } else {
-                buildList {
-                    add(exe)
-                    addAll(prefixArgs)
-                    addAll(args)
-                    add(filePath)
+        val cmd = mutableListOf<String>()
+
+        // Expand command template and inject args right before {file}.
+        // Template tokens come from the allow-listed registry (NOT the AI).
+        for (token in def.commandTemplate) {
+            when (token) {
+                "{exe}" -> {
+                    cmd += exe
+                    if (prefixArg != null) cmd += prefixArg
                 }
+                "{file}" -> {
+                    cmd += args
+                    cmd += filePath
+                }
+                else -> cmd += token
             }
+        }
+
+        // If template did not include {file}, append args + file (best-effort, still safe).
+        if (!def.commandTemplate.contains("{file}")) {
+            cmd += args
+            cmd += filePath
+        }
 
         val cwd = File(File(filePath).parentFile?.absolutePath ?: ".")
 
         return try {
-            val pb = ProcessBuilder(finalCmd).directory(cwd)
+            val pb = ProcessBuilder(cmd).directory(cwd)
             val p = pb.start()
-
             val out = p.inputStream.bufferedReader().readText()
             val err = p.errorStream.bufferedReader().readText()
-
             p.waitFor(10, TimeUnit.MINUTES)
             val code = p.exitValue()
-
-            FormatterRunner.RunResult(
-                ok = code == 0,
-                stdout = out,
-                stderr = err,
-                exitCode = code,
-            )
+            FormatterRunner.RunResult(ok = code == 0, stdout = out, stderr = err, exitCode = code)
         } catch (t: Throwable) {
-            log.warn("Failed to run formatter: $finalCmd", t)
-            FormatterRunner.RunResult(
-                ok = false,
-                stdout = "",
-                stderr = t.message ?: "run error",
-                exitCode = 1,
-            )
+            log.warn("Failed to run formatter: $cmd", t)
+            FormatterRunner.RunResult(ok = false, stdout = "", stderr = t.message ?: "run error", exitCode = 1)
         }
-    }
-
-    private fun parseExeSpec(exeSpec: String): Pair<String, List<String>> {
-        // "node.exe|script.cjs" => exe=node.exe, prefixArgs=[script.cjs]
-        val parts = exeSpec.split("|", limit = 2)
-        val exe = parts[0].trim()
-        val prefixArgs = if (parts.size == 2 && parts[1].isNotBlank()) listOf(parts[1].trim()) else emptyList()
-        return exe to prefixArgs
-    }
-
-    private fun expandTemplate(
-        template: List<String>,
-        exe: String,
-        prefixArgs: List<String>,
-        args: List<String>,
-        filePath: String,
-    ): List<String> {
-        val out = mutableListOf<String>()
-
-        for (token in template) {
-            when (token) {
-                "{exe}" -> {
-                    out += exe
-                    // Inject prefix args immediately after exe (e.g., node + script)
-                    out += prefixArgs
-                }
-                "{file}" -> out += filePath
-                "{args}" -> out += args
-                else -> out += token
-            }
-        }
-
-        // If the template didn't include {args}, append args + file at end (safe default)
-        if (!template.contains("{args}")) out += args
-        if (!template.contains("{file}")) out += filePath
-
-        return out
     }
 }

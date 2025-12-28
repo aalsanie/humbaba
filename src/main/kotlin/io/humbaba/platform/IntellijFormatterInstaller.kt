@@ -3,7 +3,7 @@
  *
  * Author: @aalsanie
  *
- * Plugin: TODO: REPLACEME
+ * Plugin: https://plugins.jetbrains.com/plugin/29545-humbaba-formatter
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -113,7 +113,7 @@ class IntellijFormatterInstaller(
         // 3) Generic last resort: fail with useful diagnostics
         return fail(
             "Installed but executable not found. Expected: $shim. " +
-                "Check if node_modules was created under: $base",
+                    "Check if node_modules was created under: $base",
         )
     }
 
@@ -214,15 +214,27 @@ class IntellijFormatterInstaller(
             ProcRes(1, "", t.message ?: "process error")
         }
 
-    private fun findOnPath(name: String): String? =
-        try {
+    private fun findOnPath(name: String): String? {
+        return try {
             val cmd = if (isWindows()) listOf("where", name) else listOf("which", name)
             val p = ProcessBuilder(cmd).start()
-            val out = p.inputStream.bufferedReader().readLine()
-            if (p.waitFor(3, TimeUnit.SECONDS) && p.exitValue() == 0) out?.trim() else null
+            val lines = p.inputStream.bufferedReader().readLines().map { it.trim() }.filter { it.isNotBlank() }
+            val ok = p.waitFor(3, TimeUnit.SECONDS) && p.exitValue() == 0
+            if (!ok || lines.isEmpty()) return null
+
+            val pick = lines.first()
+
+            if (isWindows()) {
+                val lower = pick.lowercase()
+                if ((lower.endsWith("\\npm") || lower.endsWith("/npm")) && File(pick + ".cmd").exists()) return pick + ".cmd"
+                if ((lower.endsWith("\\npx") || lower.endsWith("/npx")) && File(pick + ".cmd").exists()) return pick + ".cmd"
+            }
+
+            pick
         } catch (_: Throwable) {
             null
         }
+    }
 
     private fun ok(
         msg: String,

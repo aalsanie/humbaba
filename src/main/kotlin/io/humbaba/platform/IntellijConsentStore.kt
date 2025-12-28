@@ -3,7 +3,7 @@
  *
  * Author: @aalsanie
  *
- * Plugin: TODO: REPLACEME
+ * Plugin: https://plugins.jetbrains.com/plugin/29545-humbaba-formatter
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -23,38 +23,44 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import io.humbaba.domains.ports.ConsentStore
-import java.util.concurrent.ConcurrentHashMap
+import java.util.Locale
 
-@Service
-@State(name = "FormatMasterConsentStore", storages = [Storage("format-master-consent.xml")])
+@Service(Service.Level.APP)
+@State(
+    name = "HumbabaConsentStore",
+    storages = [Storage("humbaba-consent.xml")],
+)
 class IntellijConsentStore :
-    PersistentStateComponent<IntellijConsentStore.State>,
-    ConsentStore {
+    ConsentStore,
+    PersistentStateComponent<IntellijConsentStore.State> {
     data class State(
-        var trusted: MutableMap<String, Boolean> = mutableMapOf(),
+        var trustedFormatterIds: MutableSet<String> = mutableSetOf(),
     )
 
     private var state = State()
-    private val cache = ConcurrentHashMap<String, Boolean>()
 
-    override fun getState(): State {
-        state.trusted.forEach { cache[it.key] = it.value }
-        return state
-    }
+    override fun getState(): State = state
 
     override fun loadState(state: State) {
-        this.state = state
-        cache.clear()
-        state.trusted.forEach { cache[it.key] = it.value }
+        // defensive copy (avoid sharing mutable reference)
+        this.state = State(trustedFormatterIds = state.trustedFormatterIds.toMutableSet())
     }
 
-    override fun isFormatterTrusted(formatterId: String): Boolean = cache[formatterId] ?: state.trusted[formatterId] ?: false
-
-    override fun markFormatterTrusted(
-        formatterId: String,
-        trusted: Boolean,
-    ) {
-        state.trusted[formatterId] = trusted
-        cache[formatterId] = trusted
+    override fun isFormatterTrusted(formatterId: String): Boolean {
+        val key = normalize(formatterId)
+        return state.trustedFormatterIds.any { normalize(it) == key }
     }
+
+    override fun trustFormatter(formatterId: String) {
+        state.trustedFormatterIds.add(normalize(formatterId))
+    }
+
+    override fun untrustFormatter(formatterId: String) {
+        val key = normalize(formatterId)
+        state.trustedFormatterIds.removeIf { normalize(it) == key }
+    }
+
+    override fun trustedFormatters(): Set<String> = state.trustedFormatterIds.toSet()
+
+    private fun normalize(id: String): String = id.trim().lowercase(Locale.ROOT)
 }

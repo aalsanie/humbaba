@@ -3,7 +3,7 @@
  *
  * Author: @aalsanie
  *
- * Plugin: TODO: REPLACEME
+ * Plugin: https://plugins.jetbrains.com/plugin/29545-humbaba-formatter
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -19,6 +19,8 @@
 package io.humbaba.platform
 
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.util.ThrowableComputable
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiManager
 import io.humbaba.domains.ports.FileClassifier
@@ -28,11 +30,13 @@ class IntellijFileClassifier(
     private val project: Project,
 ) : FileClassifier {
     override fun classify(filePath: String): Pair<String, String?> {
-        val vf = LocalFileSystem.getInstance().findFileByPath(filePath) ?: return extOnly(filePath) to null
-        val ext = (vf.extension ?: "").lowercase()
-        val psi = PsiManager.getInstance(project).findFile(vf)
-        val lang = psi?.language?.id
-        return ext to lang
+        return ReadAction.compute(ThrowableComputable {
+            val vf = LocalFileSystem.getInstance().findFileByPath(filePath) ?: return@ThrowableComputable extOnly(filePath) to null
+            val ext = (vf.extension ?: "").lowercase()
+            val psi = PsiManager.getInstance(project).findFile(vf)
+            val lang = psi?.language?.id
+            ext to lang
+        })
     }
 
     override fun sample(
