@@ -32,15 +32,6 @@ Humbaba provides:
 - Kotlin
 - (JS/TS/JSON/CSS/HTML/Markdown/YAML)
 
-## Usage
-- Export your open api key or save it using password save
-- Go to: Settings / Preferences → Tools → Humbaba Formatter (your plugin settings page)
-- Paste your OpenAI key in the OpenAI API Key field
-- Click Save Key
-- Right-click inside an editor → **Humbaba: Format Single File**
-- Right-click in editor or Project view → **Humbaba: Format All Files**
-- Tools → **Humbaba Formatter** → **Humbaba: Format All Files**
-
 ### Usage
 - Right-click in editor or Project view → Humbaba: Format All Files
 - Tools → Humbaba Formatter → Format All Files
