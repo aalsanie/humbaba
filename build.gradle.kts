@@ -13,68 +13,26 @@
  * limitations under the License.
  */
 
-import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 plugins {
-    kotlin("jvm") version "1.9.23"
-    id("org.jetbrains.intellij.platform") version "2.10.5"
+    kotlin("jvm") version "1.9.23" apply false
+    kotlin("plugin.serialization") version "1.9.23" apply false
+    id("org.jetbrains.intellij.platform") version "2.5.0" apply false
+
     id("com.diffplug.spotless") version "8.1.0"
 }
 
-group = "io.humbaba"
-version = "1.1.1"
+allprojects {
+    group = "io.humbaba"
+    version = (findProperty("pluginVersion") as String?) ?: "0.1.0"
 
-repositories {
-    mavenCentral()
-
-    intellijPlatform {
-        defaultRepositories()
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
     }
-}
-
-dependencies {
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
-    intellijPlatform {
-        intellijIdea("2024.2")
-        bundledPlugin("org.jetbrains.kotlin")
-        bundledPlugin("com.intellij.java")
-    }
-}
-
-tasks.withType<KotlinCompile>().configureEach {
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-}
-
-intellijPlatform {
-
-    pluginConfiguration {
-
-        ideaVersion {
-            sinceBuild = "233"
-            untilBuild = "252.*"
+    configurations.all {
+        resolutionStrategy {
+            force("org.jetbrains.kotlinx:kotlinx-serialization-core:1.6.3")
+            force("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
         }
-    }
-
-    pluginVerification {
-        ides {
-            create(IntelliJPlatformType.IntellijIdea, "2024.2")
-            create(IntelliJPlatformType.IntellijIdea, "2024.3")
-            create(IntelliJPlatformType.IntellijIdea, "2025.2")
-        }
-    }
-}
-
-spotless {
-    kotlin {
-        ktlint()
-        licenseHeaderFile(rootProject.file("spotless/HEADER.kt"), "package ")
-    }
-
-    kotlinGradle {
-        ktlint()
     }
 }

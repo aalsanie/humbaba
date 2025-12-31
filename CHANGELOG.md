@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased] 
+### Added
+- core module contains humbaba core logic
+- cli module to package and publish as mave/gradle plugin
+- humbaba module
+- intellij plugin module
 [1.1.1]
 ### Added
 - Upgrade gradle to 8.13 and use `intellij.platform`

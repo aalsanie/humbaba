@@ -43,18 +43,39 @@ Humbaba provides:
 
 ## Build & Run
 
-Run
-
-```bash
-gradlew.bat spotlessApply
-gradlew runIde
+Build
+```shell
+gradlew clean build
 ```
 
-Build & Verify
+Cli:
+```shell
+gradlew :cli:build
+gradlew :cli:run --args="--help"
+gradlew :cli:run --args="format . --dry-run"
+## with ai
+export OPENAI_API_KEY="xxxxx"
+gradlew :cli:run --args="--help" --root . --ai
+```
 
+Intellij plugin
 ```bash
-gradlew runPluginVerifier
-gradlew buildPlugin
+
+gradlew :intellij-plugin:build
+gradlew :intellij-plugin:runIde
+```
+
+Gradle plugin
+```shell
+gradlew :humbaba:build
+gradlew :humbaba:test
+gradlew humbabaFormat --stacktrace
+```
+
+Maven plugin
+```shell
+gradlew :humbaba-maven-plugin:build
+mvn humbaba:format -X
 ```
 
 License
