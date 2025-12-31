@@ -47,7 +47,7 @@ fun main(args: Array<String>) {
         exitProcess(0)
     }
 
-    val command = parsed.command!!.lowercase()
+    val command = parsed.command.lowercase()
     if (command != "format") {
         System.err.println("Unknown command: ${parsed.command}")
         System.err.println()
