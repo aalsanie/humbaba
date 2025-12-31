@@ -39,6 +39,7 @@ Humbaba provides:
 - Humbaba shows a dry-run summary
 - You can preview diffs per file
 - Nothing is written until you explicitly confirm
+- Reports are generated under .humbaba/reports
 
 ## Build & Run
 
