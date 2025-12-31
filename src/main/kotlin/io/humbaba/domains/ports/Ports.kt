@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025-2026 | Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+ * Copyright © 2025-2026 | Humbaba is a safe, deterministic formatting orchestrator for polyglot repositories.
  * Reports back format coverage percentage
  *
  * Author: @aalsanie
@@ -38,6 +38,19 @@ interface NativeFormatter {
     fun tryFormat(filePath: String): Boolean
 }
 
+/**
+ * Writes file content via the IDE document model (WriteCommandAction), keeping PSI/VFS consistent.
+ */
+interface FileContentWriter {
+    /**
+     * Replace the file content with [newText]. Implementations should commit and save.
+     */
+    fun writeText(
+        filePath: String,
+        newText: String,
+    ): Boolean
+}
+
 interface AiRecommender {
     fun recommend(request: FormatRequest): FormatterRecommendation?
 }
@@ -46,16 +59,8 @@ interface AiRecommender {
  * Optional AI helper for:
  *  - scoring whether a candidate output looks properly formatted
  *  - producing a formatted output as a last resort
- *
- * Implementations MUST be best-effort and return null when unavailable.
  */
 interface AiFormatAdvisor {
-    /** Return a 0-100 score;
-     * rules: 90+ score
-     * 80+ score accepted on rerun
-     * 70+ rely on AI
-     * if less then DON't format
-     */
     fun score(
         extension: String,
         languageId: String?,
@@ -63,7 +68,6 @@ interface AiFormatAdvisor {
         candidate: String,
     ): Int?
 
-    /** Return formatted text for the given content, or null if unavailable. */
     fun format(
         extension: String,
         languageId: String?,

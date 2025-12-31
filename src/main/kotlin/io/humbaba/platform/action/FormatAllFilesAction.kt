@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025-2026 | Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+ * Copyright © 2025-2026 | Humbaba is a safe, deterministic formatting orchestrator for polyglot repositories.
  * Reports back format coverage percentage
  *
  * Author: @aalsanie
@@ -19,15 +19,20 @@
  */
 package io.humbaba.platform.action
 
+import com.intellij.diff.DiffContentFactory
+import com.intellij.diff.DiffManager
+import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import io.humbaba.domains.model.FileFormatReport
@@ -36,6 +41,7 @@ import io.humbaba.domains.model.FormatRequest
 import io.humbaba.domains.model.FormatResult
 import io.humbaba.domains.model.FormatStepType
 import io.humbaba.platform.IntellijEnv
+import io.humbaba.platform.IntellijFileContentWriter
 import io.humbaba.platform.core.UseCaseFactory
 import io.humbaba.reporting.FormatCoverageAggregator
 import io.humbaba.reporting.FormatCoverageHtmlWriter
@@ -57,7 +63,7 @@ import java.security.MessageDigest
  *
  * Coverage counts FORMATTED + ALREADY_FORMATTED as covered.
  *
- * Reports saved to: <project>/target/humbaba/
+ * Reports saved to: <project>/.humbaba/reports/
  */
 class FormatAllFilesAction : AnAction() {
     override fun update(e: AnActionEvent) {
@@ -67,9 +73,32 @@ class FormatAllFilesAction : AnAction() {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
 
+        val dialog = FormatAllFilesRunDialog(project)
+        if (!dialog.showAndGet()) return
+
+        val dryRun = dialog.isDryRun
+        val previewDiffs = dialog.isPreviewDiffs
+        val aiEnabled = dialog.isAiEnabled
+
+        if (aiEnabled) {
+            val ok =
+                Messages.showOkCancelDialog(
+                    project,
+                    "AI formatting is EXPERIMENTAL and may change semantics.\n\n" +
+                        "Only enable it if you have backups / version control, and review diffs.\n\n" +
+                        "Proceed?",
+                    "Enable AI Formatting (Experimental)",
+                    "Proceed",
+                    "Cancel",
+                    null,
+                )
+            if (ok != Messages.OK) return
+        }
+
         object : Task.Backgroundable(project, "Humbaba: format all files", true) {
             override fun run(indicator: ProgressIndicator) {
                 val (useCase, settings, registry) = UseCaseFactory.build(project)
+                val writer = IntellijFileContentWriter(project)
 
                 val eligible =
                     collectEligibleProjectFiles(project) { ext ->
@@ -87,6 +116,7 @@ class FormatAllFilesAction : AnAction() {
                 }
 
                 val reports = mutableListOf<FileFormatReport>()
+                val diffs = mutableListOf<DiffPreview>()
 
                 eligible.forEachIndexed { idx, vf ->
                     if (indicator.isCanceled) return
@@ -95,6 +125,7 @@ class FormatAllFilesAction : AnAction() {
                     indicator.text = "Formatting (${idx + 1}/${eligible.size}): ${vf.presentableUrl}"
 
                     val path = Path.of(vf.path)
+                    val beforeText = safeReadText(path)
                     val beforeHash = hashFile(path)
 
                     val req =
@@ -108,6 +139,8 @@ class FormatAllFilesAction : AnAction() {
                             preferExistingFormatterFirst = settings.preferExistingFormatterFirst,
                             allowAutoInstall = settings.allowExternalAutoInstall,
                             networkAllowed = settings.networkAllowed,
+                            aiEnabled = aiEnabled,
+                            dryRun = dryRun,
                         )
 
                     val result = useCase.execute(req)
@@ -119,22 +152,37 @@ class FormatAllFilesAction : AnAction() {
                         // ignore
                     }
 
+                    val afterText = safeReadText(path)
                     val afterHash = hashFile(path)
 
-                    reports += buildDeterministicFileReport(vf, beforeHash, afterHash, result)
+                    val changed = beforeHash != null && afterHash != null && beforeHash != afterHash
+
+                    // Dry-run should not leave any modifications behind.
+                    if (dryRun && changed && beforeText != null) {
+                        writer.writeText(vf.path, beforeText)
+                    }
+
+                    if (previewDiffs && changed && beforeText != null && afterText != null) {
+                        diffs += DiffPreview(vf.presentableUrl, beforeText, afterText)
+                    }
+
+                    reports += buildDeterministicFileReport(vf, beforeHash, afterHash, changed, result)
                 }
 
                 val coverage = FormatCoverageAggregator.aggregate(reports)
 
-                val reportDir = reportDir(project)
-                Files.createDirectories(reportDir)
+                // ✅ Write reports under <project>/.humbaba/reports/ (create if missing)
+                val reportsDir = reportsDir(project)
+                Files.createDirectories(reportsDir)
 
-                FormatCoverageJsonWriter.write(coverage, reportDir.resolve("format-coverage.json"))
-                FormatCoverageXmlWriter.write(coverage, reportDir.resolve("format-coverage.xml"))
-                FormatCoverageHtmlWriter.write(coverage, reportDir.resolve("format-coverage.html"))
+                val jsonPath = reportsDir.resolve("format-coverage.json")
+                val xmlPath = reportsDir.resolve("format-coverage.xml")
+                val htmlPath = reportsDir.resolve("format-coverage.html")
 
-                // counts are based on disk changes not cache.
-                val formatted = reports.count { it.outcome == FormatOutcome.FORMATTED }
+                FormatCoverageJsonWriter.write(coverage, jsonPath)
+                FormatCoverageXmlWriter.write(coverage, xmlPath)
+                FormatCoverageHtmlWriter.write(coverage, htmlPath)
+
                 val already = reports.count { it.outcome == FormatOutcome.ALREADY_FORMATTED }
                 val failed = reports.count { it.outcome == FormatOutcome.FAILED }
 
@@ -142,13 +190,13 @@ class FormatAllFilesAction : AnAction() {
                     buildString {
                         append("Humbaba Formatter completed.\n")
                         append("• Files processed: ${coverage.totalFiles}\n")
-                        append("• Formatted: $already\n")
+                        append("• Already formatted: $already\n")
                         append("• Failed: $failed\n")
                         append("• Format coverage: ${coverage.coveragePercent}%\n")
                         append("\nReports saved to:\n")
-                        append("• ${reportDir.resolve("format-coverage.html")}\n")
-                        append("• ${reportDir.resolve("format-coverage.json")}\n")
-                        append("• ${reportDir.resolve("format-coverage.xml")}\n")
+                        append("• $htmlPath\n")
+                        append("• $jsonPath\n")
+                        append("• $xmlPath\n")
                     }.trim()
 
                 notify(
@@ -156,16 +204,21 @@ class FormatAllFilesAction : AnAction() {
                     msg,
                     if (failed == 0) NotificationType.INFORMATION else NotificationType.WARNING,
                 )
+
+                if (previewDiffs && diffs.isNotEmpty()) {
+                    ApplicationManager.getApplication().invokeLater {
+                        showDiffs(project, diffs)
+                    }
+                }
             }
         }.queue()
     }
-
-    // ============================================================
 
     private fun buildDeterministicFileReport(
         vf: VirtualFile,
         beforeHash: String?,
         afterHash: String?,
+        changed: Boolean,
         result: FormatResult,
     ): FileFormatReport {
         val ext = (vf.extension ?: "").lowercase()
@@ -174,16 +227,6 @@ class FormatAllFilesAction : AnAction() {
             result.applied.firstOrNull { it.type == FormatStepType.CHOOSE }?.message
                 ?: result.applied.firstOrNull { it.type == FormatStepType.AI_RECOMMEND && it.message.contains("Selected") }?.message
                 ?: result.applied.firstOrNull { it.type == FormatStepType.RUN_EXTERNAL_FORMATTER }?.message
-
-        val score =
-            result.applied
-                .lastOrNull { it.type == FormatStepType.SCORE }
-                ?.message
-                ?.filter { it.isDigit() }
-                ?.toIntOrNull()
-
-        val changed =
-            beforeHash != null && afterHash != null && beforeHash != afterHash
 
         val outcome =
             when {
@@ -204,14 +247,48 @@ class FormatAllFilesAction : AnAction() {
             extension = ext,
             outcome = outcome,
             chosenFormatter = formatterChosen,
-            score = score,
+            beforeHash = beforeHash,
+            afterHash = afterHash,
+            changed = changed,
             notes = notes,
         )
     }
 
-    private fun reportDir(project: Project): Path {
+    private data class DiffPreview(
+        val title: String,
+        val before: String,
+        val after: String,
+    )
+
+    private fun showDiffs(
+        project: Project,
+        diffs: List<DiffPreview>,
+    ) {
+        val max = 10
+        val shown = diffs.take(max)
+        val factory = DiffContentFactory.getInstance()
+        for (d in shown) {
+            val request =
+                SimpleDiffRequest(
+                    "Humbaba Preview: ${d.title}",
+                    factory.create(d.before),
+                    factory.create(d.after),
+                    "Before",
+                    "After",
+                )
+            DiffManager.getInstance().showDiff(project, request)
+        }
+    }
+
+    /**
+     * Reports are tooling artifacts, not build artifacts:
+     * <projectRoot>/.humbaba/reports/
+     *
+     * This creates the directory if it doesn't exist.
+     */
+    private fun reportsDir(project: Project): Path {
         val base = project.basePath ?: "."
-        return Path.of(base).resolve("target").resolve("humbaba")
+        return Path.of(base).resolve(".humbaba").resolve("reports")
     }
 
     private fun hashFile(path: Path): String? {
@@ -223,6 +300,18 @@ class FormatAllFilesAction : AnAction() {
             Files.newInputStream(path).use { input ->
                 hashStream(input, if (size > maxBytes) maxBytes else Long.MAX_VALUE)
             }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun safeReadText(path: Path): String? {
+        return try {
+            if (!Files.exists(path) || Files.isDirectory(path)) return null
+            val bytes = Files.readAllBytes(path)
+            val max = 200_000
+            val slice = if (bytes.size > max) bytes.copyOfRange(0, max) else bytes
+            slice.toString(Charsets.UTF_8)
         } catch (_: Throwable) {
             null
         }
@@ -278,9 +367,7 @@ class FormatAllFilesAction : AnAction() {
     }
 
     private companion object {
-        // hashing cap keeps action fast; formatting changes always occur early in the file too.
         private const val MAX_HASH_BYTES: Long = 5_000_000
-
         private val NATIVE_ONLY = setOf("xml", "java", "kt", "kts", "json")
         private val NO_OP_BUT_SUCCESS = setOf("js", "jsx", "ts", "tsx", "css", "cmd", "bat")
     }

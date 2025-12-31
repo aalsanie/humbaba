@@ -4,9 +4,9 @@
     <vendor email="a.aalsanie@outlook.com" url="https://plugins.jetbrains.com">Humbaba Formatter</vendor>
 
     <description><![CDATA[
-        AI based formatter that uses heuristic, deterministic and AI format strategy
-        to format the whole project regardless of programming language and extension with one click.
-        Produces accurate format coverage reports and supports +14 programming language and extensions.
+        Humbaba is a safe, deterministic formatting orchestrator for polyglot repositories.
+        It coordinates IntelliJ’s native formatter and trusted external
+        formatters under a single, auditable workflow
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

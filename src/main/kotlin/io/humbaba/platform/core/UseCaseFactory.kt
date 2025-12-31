@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025-2026 | Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+ * Copyright © 2025-2026 | Humbaba is a safe, deterministic formatting orchestrator for polyglot repositories.
  * Reports back format coverage percentage
  *
  * Author: @aalsanie
@@ -30,6 +30,7 @@ import io.humbaba.formatters.DefaultSafetyPolicy
 import io.humbaba.platform.IntellijConsentPrompter
 import io.humbaba.platform.IntellijConsentStore
 import io.humbaba.platform.IntellijFileClassifier
+import io.humbaba.platform.IntellijFileContentWriter
 import io.humbaba.platform.IntellijFormatterInstaller
 import io.humbaba.platform.IntellijFormatterRunner
 import io.humbaba.platform.IntellijNativeFormatter
@@ -46,6 +47,7 @@ object UseCaseFactory {
 
         val classifier = IntellijFileClassifier(project)
         val nativeFormatter = IntellijNativeFormatter(project)
+        val fileContentWriter = IntellijFileContentWriter(project)
 
         val apiKey = OpenAiKeyStore.get().ifBlank { System.getenv("OPENAI_API_KEY").orEmpty() }
 
@@ -88,6 +90,7 @@ object UseCaseFactory {
             FormatMasterUseCase(
                 classifier = classifier,
                 nativeFormatter = nativeFormatter,
+                fileContentWriter = fileContentWriter,
                 aiRecommender = ai,
                 aiAdvisor = aiAdvisor,
                 registry = registry,

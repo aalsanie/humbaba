@@ -12,55 +12,65 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "2.0.21"
-    id("org.jetbrains.intellij") version "1.17.4"
+    kotlin("jvm") version "1.9.23"
+    id("org.jetbrains.intellij.platform") version "2.10.5"
     id("com.diffplug.spotless") version "8.1.0"
 }
 
 group = "io.humbaba"
-version = "1.0.2"
+version = "1.1.0"
 
 repositories {
     mavenCentral()
-}
 
-intellij {
-    version.set("2024.2.0.1")
-    type.set("IC")
-    plugins.set(listOf())
+    intellijPlatform {
+        defaultRepositories()
+    }
 }
 
 dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
+    intellijPlatform {
+        intellijIdea("2024.2")
+        bundledPlugin("org.jetbrains.kotlin")
+        bundledPlugin("com.intellij.java")
+    }
 }
 
 tasks.withType<KotlinCompile>().configureEach {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    kotlinOptions {
+        jvmTarget = "17"
     }
 }
 
-tasks {
-    patchPluginXml {
-        sinceBuild.set("233")
-        untilBuild.set("252.*")
-    }
-}
+intellijPlatform {
 
-tasks {
-    runPluginVerifier {
-        ideVersions.set(listOf("2023.3", "2024.1", "2024.2", "2024.3"))
+    pluginConfiguration {
+
+        ideaVersion {
+            sinceBuild = "233"
+            untilBuild = "252.*"
+        }
+    }
+
+    pluginVerification {
+        ides {
+            create(IntelliJPlatformType.IntellijIdea, "2024.2")
+            create(IntelliJPlatformType.IntellijIdea, "2024.3")
+            create(IntelliJPlatformType.IntellijIdea, "2025.2")
+        }
     }
 }
 
 spotless {
     kotlin {
         ktlint()
-
         licenseHeaderFile(rootProject.file("spotless/HEADER.kt"), "package ")
     }
 

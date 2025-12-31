@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025-2026 | Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+ * Copyright © 2025-2026 | Humbaba is a safe, deterministic formatting orchestrator for polyglot repositories.
  * Reports back format coverage percentage
  *
  * Author: @aalsanie
@@ -22,7 +22,10 @@ package io.humbaba.platform
 import com.intellij.openapi.diagnostic.Logger
 import io.humbaba.domains.model.FormatterDefinition
 import io.humbaba.domains.ports.FormatterRunner
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStream
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
@@ -64,14 +67,52 @@ class IntellijFormatterRunner : FormatterRunner {
         return try {
             val pb = ProcessBuilder(cmd).directory(cwd)
             val p = pb.start()
-            val out = p.inputStream.bufferedReader().readText()
-            val err = p.errorStream.bufferedReader().readText()
-            p.waitFor(10, TimeUnit.MINUTES)
+
+            val pool = Executors.newFixedThreadPool(2)
+            val stdoutFuture = pool.submit<String> { readStreamCapped(p.inputStream) }
+            val stderrFuture = pool.submit<String> { readStreamCapped(p.errorStream) }
+
+            val finished = p.waitFor(TIMEOUT_MINUTES, TimeUnit.MINUTES)
+            if (!finished) {
+                runCatching { p.destroy() }
+                runCatching { p.destroyForcibly() }
+                pool.shutdownNow()
+                val msg = "timeout after ${TIMEOUT_MINUTES}m"
+                log.warn("Formatter timed out: ${cmd.joinToString(" ")}")
+                return FormatterRunner.RunResult(ok = false, stdout = "", stderr = msg, exitCode = 124)
+            }
+
             val code = p.exitValue()
+            val out = runCatching { stdoutFuture.get(100, TimeUnit.MILLISECONDS) }.getOrDefault("")
+            val err = runCatching { stderrFuture.get(100, TimeUnit.MILLISECONDS) }.getOrDefault("")
+            pool.shutdownNow()
+            if (code != 0) {
+                log.warn("Formatter exited with $code: ${cmd.joinToString(" ")}")
+            }
+
             FormatterRunner.RunResult(ok = code == 0, stdout = out, stderr = err, exitCode = code)
         } catch (t: Throwable) {
-            log.warn("Failed to run formatter: $cmd", t)
+            log.warn("Failed to run formatter: ${cmd.joinToString(" ")}", t)
             FormatterRunner.RunResult(ok = false, stdout = "", stderr = t.message ?: "run error", exitCode = 1)
         }
+    }
+
+    private fun readStreamCapped(input: InputStream): String {
+        val out = ByteArrayOutputStream()
+        val buf = ByteArray(16 * 1024)
+        var remaining = MAX_OUTPUT_BYTES
+        while (remaining > 0) {
+            val toRead = minOf(buf.size.toLong(), remaining).toInt()
+            val n = input.read(buf, 0, toRead)
+            if (n <= 0) break
+            out.write(buf, 0, n)
+            remaining -= n.toLong()
+        }
+        return out.toByteArray().toString(Charsets.UTF_8)
+    }
+
+    private companion object {
+        private const val TIMEOUT_MINUTES: Long = 10
+        private const val MAX_OUTPUT_BYTES: Long = 1_000_000
     }
 }

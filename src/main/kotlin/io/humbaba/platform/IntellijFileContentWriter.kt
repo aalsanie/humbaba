@@ -21,31 +21,35 @@ package io.humbaba.platform
 
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.ThrowableComputable
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiDocumentManager
-import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
-import com.intellij.psi.codeStyle.CodeStyleManager
-import io.humbaba.domains.ports.NativeFormatter
+import io.humbaba.domains.ports.FileContentWriter
 
-class IntellijNativeFormatter(
+/**
+ * Applies text changes via the IDE document model to avoid desync between PSI, document, and VFS.
+ */
+class IntellijFileContentWriter(
     private val project: Project,
-) : NativeFormatter {
-    override fun tryFormat(filePath: String): Boolean {
+) : FileContentWriter {
+    override fun writeText(
+        filePath: String,
+        newText: String,
+    ): Boolean {
         val vf = LocalFileSystem.getInstance().findFileByPath(filePath) ?: return false
         if (vf.isDirectory || vf.fileType.isBinary || !vf.isWritable) return false
 
-        // PSI access must be in a read action
-        val psiFile: PsiFile =
+        val psiFile =
             ReadAction.compute(
-                ThrowableComputable<PsiFile?, RuntimeException> {
+                ThrowableComputable {
                     PsiManager.getInstance(project).findFile(vf)
                 },
             ) ?: return false
 
-        val document =
+        val doc =
             ReadAction.compute(
                 ThrowableComputable {
                     PsiDocumentManager.getInstance(project).getDocument(psiFile)
@@ -55,9 +59,12 @@ class IntellijNativeFormatter(
         return WriteCommandAction.runWriteCommandAction(
             project,
             ThrowableComputable<Boolean, RuntimeException> {
+                doc.setText(newText)
                 val pdm = PsiDocumentManager.getInstance(project)
-                pdm.commitDocument(document)
-                runCatching { CodeStyleManager.getInstance(project).reformat(psiFile) }.isSuccess
+                pdm.commitDocument(doc)
+                pdm.doPostponedOperationsAndUnblockDocument(doc)
+                FileDocumentManager.getInstance().saveDocument(doc)
+                true
             },
         )
     }

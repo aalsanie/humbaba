@@ -2,9 +2,23 @@
 
 ## [Unreleased] 
 
-## [1.0.2]
-### Fixed
+## [1.1.0]
+### Added
 - Upgrade gradle to 8.13 and use `intellij.platform`
+- Ensured formatter execution and file mutations are fully compliant with IntelliJ PSI/VFS lifecycle guarantees.
+- Added a dry-run phase for “Format All Files” to compute coverage and eligibility without modifying files.
+- Introduced a basic diff preview before applying repository-wide formatting.
+- Users must explicitly confirm before any destructive changes are written.
+### Fixed
+- Hardened external formatter execution
+- AI formatting is now strictly opt-in per run and disabled by default.
+- Changed calculation to be reproducible.
+- Improved separation between planning, execution, and write phases.
+- Formatter selection and execution decisions are now explainable and auditable.
+- Improved cancellation behavior and responsiveness during long-running format operations.
+
+### Removed
+-Removed all direct disk writes during formatting.
 
 ## [1.0.1]
 ### Added

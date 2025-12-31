@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025-2026 | Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+ * Copyright © 2025-2026 | Humbaba is a safe, deterministic formatting orchestrator for polyglot repositories.
  * Reports back format coverage percentage
  *
  * Author: @aalsanie
@@ -52,7 +52,7 @@ object FormatCoverageHtmlWriter {
                 appendLine("<p>${report.formattedFiles} / ${report.totalFiles} files formatted</p>")
                 appendLine("<table>")
                 appendLine(
-                    "<tr><th>File</th><th>Ext</th><th>Outcome</th><th>Formatter</th><th>Score</th><th>Notes</th></tr>",
+                    "<tr><th>File</th><th>Ext</th><th>Outcome</th><th>Formatter</th><th>Changed</th><th>BeforeHash</th><th>AfterHash</th><th>Notes</th></tr>",
                 )
 
                 report.files.forEach {
@@ -66,7 +66,9 @@ object FormatCoverageHtmlWriter {
                           <td>${it.extension}</td>
                           <td>${it.outcome}</td>
                           <td>${it.chosenFormatter ?: "-"}</td>
-                          <td>${it.score ?: "-"}</td>
+                          <td>${it.changed}</td>
+                          <td>${it.beforeHash ?: "-"}</td>
+                          <td>${it.afterHash ?: "-"}</td>
                           <td>${it.notes ?: "-"}</td>
                         </tr>
                         """.trimIndent(),

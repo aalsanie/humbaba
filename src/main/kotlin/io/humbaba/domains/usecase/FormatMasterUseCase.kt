@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025-2026 | Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+ * Copyright © 2025-2026 | Humbaba is a safe, deterministic formatting orchestrator for polyglot repositories.
  * Reports back format coverage percentage
  *
  * Author: @aalsanie
@@ -31,6 +31,7 @@ import io.humbaba.domains.ports.AiRecommender
 import io.humbaba.domains.ports.ConsentPrompter
 import io.humbaba.domains.ports.ConsentStore
 import io.humbaba.domains.ports.FileClassifier
+import io.humbaba.domains.ports.FileContentWriter
 import io.humbaba.domains.ports.FormatterInstaller
 import io.humbaba.domains.ports.FormatterRegistry
 import io.humbaba.domains.ports.FormatterRunner
@@ -40,6 +41,7 @@ import io.humbaba.domains.ports.SafetyPolicy
 class FormatMasterUseCase(
     private val classifier: FileClassifier,
     private val nativeFormatter: NativeFormatter,
+    private val fileContentWriter: FileContentWriter,
     private val aiRecommender: AiRecommender,
     private val aiAdvisor: AiFormatAdvisor,
     private val registry: FormatterRegistry,
@@ -134,21 +136,7 @@ class FormatMasterUseCase(
         val afterExternal = classifier.sample(request.filePath, maxChars = 200_000) ?: ""
         val externalChanged = original != afterExternal && afterExternal.isNotBlank()
 
-        val externalScore =
-            if (externalChanged) {
-                aiAdvisor.score(extension, langId, original, afterExternal)
-            } else {
-                null
-            }
-
-        steps +=
-            FormatStep(
-                FormatStepType.SCORE,
-                "External formatter score: ${externalScore ?: "unavailable"}",
-                ok = (externalScore ?: 0) >= 90,
-            )
-
-        if (externalChanged && (externalScore ?: 0) >= 90) {
+        if (externalApplied && externalChanged) {
             steps += FormatStep(FormatStepType.DONE, "Formatted using external formatter.", ok = true)
             return FormatResult(steps, null, emptyList())
         }
@@ -166,53 +154,23 @@ class FormatMasterUseCase(
         val afterNative = classifier.sample(request.filePath, maxChars = 200_000) ?: ""
         val nativeChanged = original != afterNative && afterNative.isNotBlank()
 
-        val nativeScore =
-            if (nativeChanged) {
-                aiAdvisor.score(extension, langId, original, afterNative)
-            } else {
-                null
-            }
-
-        steps +=
-            FormatStep(
-                FormatStepType.SCORE,
-                "Native formatter score: ${nativeScore ?: "unavailable"}",
-                ok = (nativeScore ?: 0) >= 80,
-            )
-
-        // ---------------- CHOOSE BEST ----------------
-
-        val externalWins = (externalScore ?: 0) >= (nativeScore ?: 0)
-
-        when {
-            externalWins && externalChanged && (externalScore ?: 0) >= 80 -> {
-                steps +=
-                    FormatStep(
-                        FormatStepType.CHOOSE,
-                        "External formatter chosen.",
-                        ok = true,
-                    )
-                return FormatResult(steps, null, emptyList())
-            }
-
-            nativeChanged && (nativeScore ?: 0) >= 80 -> {
-                steps +=
-                    FormatStep(
-                        FormatStepType.CHOOSE,
-                        "Native formatter chosen.",
-                        ok = true,
-                    )
-                return FormatResult(steps, null, emptyList())
-            }
+        if (nativeOk && nativeChanged) {
+            steps +=
+                FormatStep(
+                    FormatStepType.CHOOSE,
+                    "Native formatter applied.",
+                    ok = true,
+                )
+            return FormatResult(steps, null, emptyList())
         }
 
         // ---------------- AI LAST RESORT ----------------
 
-        if (request.networkAllowed) {
+        if (request.networkAllowed && request.aiEnabled) {
             steps +=
                 FormatStep(
                     FormatStepType.AI_FORMAT,
-                    "Attempting AI formatting as last resort…",
+                    "Attempting AI formatting as last resort (EXPERIMENTAL; may change semantics)…",
                     ok = true,
                 )
 
@@ -220,46 +178,42 @@ class FormatMasterUseCase(
                 aiAdvisor.format(extension, langId, original)
 
             if (!aiFormatted.isNullOrBlank()) {
-                val aiScore = aiAdvisor.score(extension, langId, original, aiFormatted)
-                steps +=
-                    FormatStep(
-                        FormatStepType.SCORE,
-                        "AI formatter score: ${aiScore ?: "unavailable"}",
-                        ok = (aiScore ?: 0) >= 70,
-                    )
-
-                if ((aiScore ?: 0) >= 70) {
-                    // Replace file content
-                    java.nio.file.Files.writeString(
-                        java.nio.file.Path
-                            .of(request.filePath),
-                        aiFormatted,
-                    )
-
+                if (request.dryRun) {
                     steps +=
                         FormatStep(
                             FormatStepType.DONE,
-                            "Formatted using AI fallback.",
+                            "Dry-run: AI fallback would rewrite the file.",
+                            ok = true,
+                        )
+                    return FormatResult(steps, aiFormatted, emptyList())
+                }
+
+                val ok = fileContentWriter.writeText(request.filePath, aiFormatted)
+                if (ok) {
+                    steps +=
+                        FormatStep(
+                            FormatStepType.DONE,
+                            "Formatted using AI fallback (EXPERIMENTAL).",
                             ok = true,
                         )
                     return FormatResult(steps, null, emptyList())
                 }
+
+                errors += "AI fallback produced output but could not be applied via IDE document model."
             }
         }
 
         // ---------------- FAILURE ----------------
 
-        errors += "File could not be formatted with sufficient confidence."
+        errors += "File could not be formatted (no formatter produced a change)."
         steps +=
             FormatStep(
                 FormatStepType.DONE,
-                "Formatting failed (score below acceptable threshold).",
+                "Formatting failed (no applicable formatter).",
                 ok = false,
             )
         return FormatResult(steps, null, errors)
     }
-
-    // TODO: move this out
 
     private fun runExternalFormatter(
         request: FormatRequest,

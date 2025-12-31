@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025-2026 | Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+ * Copyright © 2025-2026 | Humbaba is a safe, deterministic formatting orchestrator for polyglot repositories.
  * Reports back format coverage percentage
  *
  * Author: @aalsanie
@@ -50,10 +50,25 @@ class FormatMasterAction : AnAction() {
         val project = e.project ?: return
         val vf = e.getData(CommonDataKeys.VIRTUAL_FILE) ?: return
 
+        val (useCase, settings, _) = UseCaseFactory.build(project)
+
+        val aiEnabled =
+            if (!settings.networkAllowed) {
+                false
+            } else {
+                Messages.showYesNoDialog(
+                    project,
+                    "Enable AI formatting fallback for this run?\n\n" +
+                        "AI is EXPERIMENTAL and may change semantics. Review diffs.",
+                    "Humbaba — AI Fallback (Experimental)",
+                    "Enable",
+                    "Disable",
+                    Messages.getWarningIcon(),
+                ) == Messages.YES
+            }
+
         object : Task.Backgroundable(project, "Humbaba: format file", true) {
             override fun run(indicator: ProgressIndicator) {
-                val (useCase, settings, _) = UseCaseFactory.build(project)
-
                 val req =
                     FormatRequest(
                         filePath = vf.path,
@@ -65,6 +80,8 @@ class FormatMasterAction : AnAction() {
                         preferExistingFormatterFirst = settings.preferExistingFormatterFirst,
                         allowAutoInstall = settings.allowExternalAutoInstall,
                         networkAllowed = settings.networkAllowed,
+                        aiEnabled = aiEnabled,
+                        dryRun = false,
                     )
 
                 val res = useCase.execute(req)
@@ -76,10 +93,8 @@ class FormatMasterAction : AnAction() {
                             Messages.showYesNoDialog(
                                 project,
                                 """Humbaba Formatter wants to use an external formatter.
-
-For safety, only allow-listed tools are supported, and args are validated.
-
-Enable external formatter auto-install/runs?""",
+                                    For safety, only allow-listed tools are supported, and args are validated.
+                                    Enable external formatter auto-install/runs?""",
                                 "Humbaba Formatter — Trust",
                                 "Enable",
                                 "Cancel",

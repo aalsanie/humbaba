@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025-2026 | Humbaba: AI based formatter that uses a heuristic and AI scoring system to format the whole project.
+ * Copyright © 2025-2026 | Humbaba is a safe, deterministic formatting orchestrator for polyglot repositories.
  * Reports back format coverage percentage
  *
  * Author: @aalsanie
@@ -41,6 +41,8 @@ data class FormatRequest(
     val preferExistingFormatterFirst: Boolean,
     val allowAutoInstall: Boolean,
     val networkAllowed: Boolean,
+    val aiEnabled: Boolean = false,
+    val dryRun: Boolean = false,
 )
 
 enum class FormatStepType {
@@ -49,14 +51,8 @@ enum class FormatStepType {
     AI_RECOMMEND,
     ENSURE_INSTALLED,
     RUN_EXTERNAL_FORMATTER,
-
-    /** AI or heuristic scoring for candidate outputs. */
     SCORE,
-
-    /** AI-based formatting fallback. */
     AI_FORMAT,
-
-    /** Internal decision step: choosing the best candidate output. */
     CHOOSE,
     DONE,
 }
@@ -90,8 +86,6 @@ data class FormatterDefinition(
     val displayName: String,
     val supportedExtensions: Set<String>,
     val installStrategies: Set<InstallStrategyType>,
-    /** Allowed flags (exact match). */
     val allowedArgs: Set<String>,
-    /** Command template where {file} is replaced with absolute file path and {exe} with resolved executable. */
     val commandTemplate: List<String>,
 )
