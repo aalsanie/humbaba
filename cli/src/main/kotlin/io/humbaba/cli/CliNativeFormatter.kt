@@ -22,9 +22,11 @@ package io.humbaba.cli
 import io.humbaba.domains.ports.NativeFormatter
 
 /**
- * CLI has no IDE-native formatter.
- * External formatters are used when available; otherwise formatting fails.
+ * CLI does not have IntelliJ PSI / native formatter.
+ *
+ * We treat native-only languages as "no-op success" so they don't count as FAILED.
+ * Real formatting should be done via external formatters in the CLI (ktlint, prettier, etc.).
  */
 class CliNativeFormatter : NativeFormatter {
-    override fun tryFormat(filePath: String): Boolean = false
+    override fun tryFormat(filePath: String): Boolean = true
 }

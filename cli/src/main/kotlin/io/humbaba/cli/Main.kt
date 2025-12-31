@@ -19,90 +19,186 @@
  */
 package io.humbaba.cli
 
-import io.humbaba.runner.HumbabaRunner
-import io.humbaba.runner.RunOptions
+import io.humbaba.domains.model.FileFormatReport
+import io.humbaba.reporting.FormatCoverageAggregator
+import io.humbaba.reporting.FormatCoverageHtmlWriter
+import io.humbaba.reporting.FormatCoverageJsonWriter
+import io.humbaba.reporting.FormatCoverageXmlWriter
+import io.humbaba.runner.EnvInfo
+import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.io.path.Path
+import java.security.MessageDigest
+import kotlin.io.path.absolute
+import kotlin.io.path.exists
+import kotlin.io.path.isDirectory
+import kotlin.io.path.isRegularFile
 import kotlin.system.exitProcess
 
-/**
- * Humbaba CLI entrypoint.
- *
- * Usage:
- *   humbaba format <path> [--root <path>] [--dry-run] [--preview] [--ai] [--yes]
- */
-fun main(args: Array<String>) {
-    val parsed = try {
-        Args.parse(args.toList())
-    } catch (t: Throwable) {
-        System.err.println(t.message ?: "Invalid arguments.")
-        System.err.println()
-        System.err.println(Args.usage())
-        exitProcess(2)
-    }
+fun main(rawArgs: Array<String>) {
+    val args = Args.parse(rawArgs.toList())
 
-    if (parsed.showHelp || parsed.command == null) {
+    if (args.showHelp || args.command == null) {
         println(Args.usage())
         exitProcess(0)
     }
 
-    val command = parsed.command.lowercase()
-    if (command != "format") {
-        System.err.println("Unknown command: ${parsed.command}")
-        System.err.println()
+    if (args.command != "format") {
+        System.err.println("Unknown command: ${args.command}")
         System.err.println(Args.usage())
         exitProcess(2)
     }
 
-    val target = parsed.targetPath
-    if (target == null) {
-        System.err.println("Missing <path> argument.")
-        System.err.println()
+    val target = args.targetPath ?: run {
+        System.err.println("Missing <path>: humbaba format <path> [options]")
         System.err.println(Args.usage())
         exitProcess(2)
     }
 
-    val root: Path =
-        (parsed.projectRoot ?: run {
-            val normalized = target.normalize()
-            when {
-                Files.isDirectory(normalized) -> normalized
-                normalized.parent != null -> normalized.parent
-                else -> Path(".")
-            }
-        }).normalize()
+    val targetAbs = target.absolute().normalize()
+    if (!targetAbs.exists()) {
+        System.err.println("Target does not exist: $targetAbs")
+        exitProcess(2)
+    }
 
-    val options = RunOptions(
-        dryRun = parsed.dryRun,
-        preview = parsed.preview,
-        aiEnabled = parsed.aiEnabled,
-        yes = parsed.yes,
-    )
+    val projectRoot =
+        (args.projectRoot ?: findProjectRoot(targetAbs)).absolute().normalize()
 
-    val runner = HumbabaRunner()
+    val cancel = CancellationFlag()
+    val useCase = CliUseCaseFactory.build(projectRoot, args, cancel)
 
-    val result = try {
-        runner.formatAndReport(
-            root = root,
-            options = options,
-            log = { println(it) },
-            isCanceled = { false },
+    // Collect files under TARGET (file or directory).
+    val files = CliFileCollector.collect(targetAbs)
+    if (files.isEmpty()) {
+        println("No eligible files found under: $targetAbs")
+        exitProcess(0)
+    }
+
+    val reports = ArrayList<FileFormatReport>(files.size)
+
+    files.forEachIndexed { idx, file ->
+        val display = try { projectRoot.relativize(file).toString() } catch (_: Throwable) { file.toString() }
+        println("(${idx + 1}/${files.size}) $display")
+
+        val beforeText = safeReadText(file)
+        val beforeHash = hashFile(file)
+
+        val result = useCase.execute(
+            CliRequests.buildRequest(file = file, args = args)
         )
-    } catch (t: Throwable) {
-        // Ctrl+C usually maps to InterruptedException in JVM tools; handle that as 130.
-        val name = t::class.simpleName ?: ""
-        if (t is InterruptedException || name.contains("Interrupted", ignoreCase = true)) {
-            System.err.println("Canceled.")
-            exitProcess(130)
+
+        if (result.errors.isNotEmpty()) {
+            System.err.println("  ✗ ${display}: ${result.errors.joinToString("; ")}")
         }
 
-        System.err.println("Failed: ${t.message ?: t::class.qualifiedName}")
-        t.printStackTrace(System.err)
-        exitProcess(1)
+        val afterHash = hashFile(file)
+        val changed = beforeHash != null && afterHash != null && beforeHash != afterHash
+
+        if (args.dryRun && changed && beforeText != null) {
+            try {
+                Files.writeString(file, beforeText)
+            } catch (_: Throwable) {
+            }
+        }
+        val finalAfterHash = if (args.dryRun) hashFile(file) else afterHash
+        val finalChanged = if (args.dryRun) false else changed
+
+        reports += CliReports.toDeterministicReport(
+            file = file,
+            beforeHash = beforeHash,
+            afterHash = finalAfterHash,
+            changed = finalChanged,
+            result = result,
+        )
     }
 
-    // Exit code: non-zero if failures happened.
-    if (result.failedFiles > 0) exitProcess(1)
+    val coverage = FormatCoverageAggregator.aggregate(reports)
+
+    val reportsDir = projectRoot.resolve(".humbaba").resolve("reports")
+    Files.createDirectories(reportsDir)
+
+    val jsonPath = reportsDir.resolve("format-coverage.json")
+    val xmlPath = reportsDir.resolve("format-coverage.xml")
+    val htmlPath = reportsDir.resolve("format-coverage.html")
+
+    FormatCoverageJsonWriter.write(coverage, jsonPath)
+    FormatCoverageXmlWriter.write(coverage, xmlPath)
+    FormatCoverageHtmlWriter.write(coverage, htmlPath)
+
+    val failed = reports.count { it.outcome.name == "FAILED" }
+
+    println("Done. coverage=${coverage.coveragePercent}% formatted=${reports.count { it.outcome.name == "FORMATTED" }} already=${reports.count { it.outcome.name == "ALREADY_FORMATTED" }} failed=$failed")
+    println("Reports: $htmlPath")
+
     exitProcess(0)
+}
+
+private object CliRequests {
+    fun buildRequest(file: Path, args: Args): io.humbaba.domains.model.FormatRequest {
+        val ext = file.fileName.toString().substringAfterLast('.', "").lowercase()
+        return io.humbaba.domains.model.FormatRequest(
+            filePath = file.toString(),
+            extension = ext,
+            languageId = null,
+            ideInfo = EnvInfo.ideInfo(), // should return IdeInfo
+            osInfo = EnvInfo.osInfo(),   // should return OsInfo
+            sample = null,
+            preferExistingFormatterFirst = true,
+            allowAutoInstall = false,
+            networkAllowed = true,
+            aiEnabled = args.aiEnabled,
+            dryRun = args.dryRun,
+        )
+    }
+}
+
+private fun findProjectRoot(targetAbs: Path): Path {
+    val start = if (targetAbs.isDirectory()) targetAbs else (targetAbs.parent ?: targetAbs)
+    var cur: Path? = start
+
+    while (cur != null) {
+        if (Files.exists(cur.resolve("settings.gradle.kts"))) return cur
+        if (Files.exists(cur.resolve("settings.gradle"))) return cur
+        if (Files.exists(cur.resolve(".git"))) return cur
+        if (Files.exists(cur.resolve("gradlew")) || Files.exists(cur.resolve("gradlew.bat"))) return cur
+        cur = cur.parent
+    }
+
+    // fallback: old behavior
+    return start
+}
+
+private fun safeReadText(path: Path): String? {
+    return try {
+        if (!path.isRegularFile()) return null
+        val bytes = Files.readAllBytes(path)
+        val max = 200_000
+        val slice = if (bytes.size > max) bytes.copyOfRange(0, max) else bytes
+        slice.toString(Charsets.UTF_8)
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+private fun hashFile(path: Path): String? {
+    return try {
+        if (!path.isRegularFile()) return null
+        Files.newInputStream(path).use { input -> hashStream(input, 5_000_000) }
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+private fun hashStream(input: InputStream, maxBytes: Long): String {
+    val md = MessageDigest.getInstance("SHA-256")
+    val buf = ByteArray(64 * 1024)
+    var remaining = maxBytes
+    while (remaining > 0) {
+        val toRead = if (remaining < buf.size) remaining.toInt() else buf.size
+        val n = input.read(buf, 0, toRead)
+        if (n <= 0) break
+        md.update(buf, 0, n)
+        remaining -= n.toLong()
+    }
+    return md.digest().joinToString("") { "%02x".format(it) }
 }

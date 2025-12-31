@@ -44,7 +44,7 @@ object CliUseCaseFactory {
         val humbabaDir = projectRoot.resolve(".humbaba")
         Files.createDirectories(humbabaDir)
 
-        val consent = CliConsentStore(humbabaDir.resolve("trusted-formatters.json"))
+        val consent = CliConsentStore()
         val prompter: ConsentPrompter = CliConsentPrompter(args.yes)
 
         val installer = CliFormatterInstaller()

@@ -19,55 +19,20 @@
  */
 package io.humbaba.cli
 
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import io.humbaba.domains.ports.ConsentStore
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
-class CliConsentStore(private val file: Path) : ConsentStore {
-    private val lock = ReentrantLock()
-    private val mapper = jacksonObjectMapper()
+class CliConsentStore : ConsentStore {
+    private val trusted = linkedSetOf<String>()
 
-    override fun isFormatterTrusted(formatterId: String): Boolean = lock.withLock {
-        read().contains(formatterId)
-    }
+    override fun isFormatterTrusted(formatterId: String): Boolean = trusted.contains(formatterId)
 
     override fun trustFormatter(formatterId: String) {
-        lock.withLock {
-            val set = read().toMutableSet()
-            set.add(formatterId)
-            write(set)
-        }
+        trusted.add(formatterId)
     }
 
     override fun untrustFormatter(formatterId: String) {
-        lock.withLock {
-            val set = read().toMutableSet()
-            set.remove(formatterId)
-            write(set)
-        }
+        trusted.remove(formatterId)
     }
 
-    override fun trustedFormatters(): Set<String> = lock.withLock { read() }
-
-    private fun read(): Set<String> {
-        return try {
-            if (!Files.exists(file)) return emptySet()
-            mapper.readValue(file.toFile())
-        } catch (_: Throwable) {
-            emptySet()
-        }
-    }
-
-    private fun write(values: Set<String>) {
-        try {
-            Files.createDirectories(file.parent)
-            mapper.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), values.toList().sorted())
-        } catch (_: Throwable) {
-            // ignore
-        }
-    }
+    override fun trustedFormatters(): Set<String> = trusted.toSet()
 }

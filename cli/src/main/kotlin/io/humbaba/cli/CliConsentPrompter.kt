@@ -1,4 +1,3 @@
-package io.humbaba.cli
 /*
  * Copyright © 2025-2026 | Humbaba is a safe, deterministic formatting orchestrator for polyglot repositories.
  * Reports back format coverage percentage
@@ -18,15 +17,23 @@ package io.humbaba.cli
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package io.humbaba.cli
+
 import io.humbaba.domains.ports.ConsentPrompter
 
+class CliConsentPrompter(
+    private val assumeYes: Boolean,
+) : ConsentPrompter {
 
-class CliConsentPrompter(private val assumeYes: Boolean) : ConsentPrompter {
     override fun askTrustFormatter(formatterId: String, displayName: String): Boolean {
         if (assumeYes) return true
 
-        print("Trust formatter '$displayName' (id=$formatterId) for this repo? [y/N]: ")
-        val ans = readLine()?.trim()?.lowercase()
-        return ans == "y" || ans == "yes"
+        while (true) {
+            print("Allow formatter '$displayName' (id=$formatterId) to run? [y/N]: ")
+            val line = readLine()?.trim()?.lowercase().orEmpty()
+            if (line.isEmpty() || line == "n" || line == "no") return false
+            if (line == "y" || line == "yes") return true
+            println("Please type 'y' or 'n'.")
+        }
     }
 }

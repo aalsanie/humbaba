@@ -21,7 +21,7 @@ package io.humbaba.cli
 
 import java.util.concurrent.atomic.AtomicBoolean
 
-class CancellationFlag private constructor() {
+class CancellationFlag {
     private val canceled = AtomicBoolean(false)
 
     fun cancel() {
