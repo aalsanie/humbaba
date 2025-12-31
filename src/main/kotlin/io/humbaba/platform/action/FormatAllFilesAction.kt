@@ -85,8 +85,8 @@ class FormatAllFilesAction : AnAction() {
                 Messages.showOkCancelDialog(
                     project,
                     "AI formatting is EXPERIMENTAL and may change semantics.\n\n" +
-                            "Only enable it if you have backups / version control, and review diffs.\n\n" +
-                            "Proceed?",
+                        "Only enable it if you have backups / version control, and review diffs.\n\n" +
+                        "Proceed?",
                     "Enable AI Formatting (Experimental)",
                     "Proceed",
                     "Cancel",
@@ -104,10 +104,10 @@ class FormatAllFilesAction : AnAction() {
                     collectEligibleProjectFiles(project) { ext ->
                         val lower = ext.lowercase()
                         lower.isNotBlank() && (
-                                registry.findByExtension(lower).isNotEmpty() ||
-                                        lower in NATIVE_ONLY ||
-                                        lower in NO_OP_BUT_SUCCESS
-                                )
+                            registry.findByExtension(lower).isNotEmpty() ||
+                                lower in NATIVE_ONLY ||
+                                lower in NO_OP_BUT_SUCCESS
+                        )
                     }
 
                 if (eligible.isEmpty()) {
@@ -302,15 +302,16 @@ class FormatAllFilesAction : AnAction() {
         try {
             if (!Files.exists(baseDir) || !Files.isDirectory(baseDir)) return
 
-            val legacyNames = listOf(
-                "format-coverage.json",
-                "format-coverage.xml",
-                "format-coverage.html",
-                // allow for older naming variants if they existed
-                "format_coverage.json",
-                "format_coverage.xml",
-                "format_coverage.html",
-            )
+            val legacyNames =
+                listOf(
+                    "format-coverage.json",
+                    "format-coverage.xml",
+                    "format-coverage.html",
+                    // allow for older naming variants if they existed
+                    "format_coverage.json",
+                    "format_coverage.xml",
+                    "format_coverage.html",
+                )
 
             for (name in legacyNames) {
                 try {
