@@ -23,7 +23,7 @@ plugins {
 }
 
 group = "io.humbaba"
-version = "1.1.0"
+version = "1.1.1"
 
 repositories {
     mavenCentral()
