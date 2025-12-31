@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased] 
+[1.1.1]
+### Fixed
+- Fixed duplicate and legacy report generation
 
 ## [1.1.0]
 ### Added

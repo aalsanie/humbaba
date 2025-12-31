@@ -85,8 +85,8 @@ class FormatAllFilesAction : AnAction() {
                 Messages.showOkCancelDialog(
                     project,
                     "AI formatting is EXPERIMENTAL and may change semantics.\n\n" +
-                        "Only enable it if you have backups / version control, and review diffs.\n\n" +
-                        "Proceed?",
+                            "Only enable it if you have backups / version control, and review diffs.\n\n" +
+                            "Proceed?",
                     "Enable AI Formatting (Experimental)",
                     "Proceed",
                     "Cancel",
@@ -104,10 +104,10 @@ class FormatAllFilesAction : AnAction() {
                     collectEligibleProjectFiles(project) { ext ->
                         val lower = ext.lowercase()
                         lower.isNotBlank() && (
-                            registry.findByExtension(lower).isNotEmpty() ||
-                                lower in NATIVE_ONLY ||
-                                lower in NO_OP_BUT_SUCCESS
-                        )
+                                registry.findByExtension(lower).isNotEmpty() ||
+                                        lower in NATIVE_ONLY ||
+                                        lower in NO_OP_BUT_SUCCESS
+                                )
                     }
 
                 if (eligible.isEmpty()) {
@@ -171,9 +171,11 @@ class FormatAllFilesAction : AnAction() {
 
                 val coverage = FormatCoverageAggregator.aggregate(reports)
 
-                // ✅ Write reports under <project>/.humbaba/reports/ (create if missing)
-                val reportsDir = reportsDir(project)
+                // remove those legacy files so users don't see duplicates or stale data.
+                val baseDir = baseDir(project)
+                val reportsDir = baseDir.resolve("reports")
                 Files.createDirectories(reportsDir)
+                cleanupLegacyReports(baseDir)
 
                 val jsonPath = reportsDir.resolve("format-coverage.json")
                 val xmlPath = reportsDir.resolve("format-coverage.xml")
@@ -286,9 +288,40 @@ class FormatAllFilesAction : AnAction() {
      *
      * This creates the directory if it doesn't exist.
      */
-    private fun reportsDir(project: Project): Path {
+    private fun baseDir(project: Project): Path {
         val base = project.basePath ?: "."
-        return Path.of(base).resolve(".humbaba").resolve("reports")
+        return Path.of(base).resolve(".humbaba")
+    }
+
+    /**
+     * Legacy cleanup: older versions used to write reports directly under <project>/.humbaba
+     * (instead of <project>/.humbaba/reports). Those files are misleading and can appear as
+     * "duplicate" exports.
+     */
+    private fun cleanupLegacyReports(baseDir: Path) {
+        try {
+            if (!Files.exists(baseDir) || !Files.isDirectory(baseDir)) return
+
+            val legacyNames = listOf(
+                "format-coverage.json",
+                "format-coverage.xml",
+                "format-coverage.html",
+                // allow for older naming variants if they existed
+                "format_coverage.json",
+                "format_coverage.xml",
+                "format_coverage.html",
+            )
+
+            for (name in legacyNames) {
+                try {
+                    Files.deleteIfExists(baseDir.resolve(name))
+                } catch (_: Throwable) {
+                    // ignore per-file failures
+                }
+            }
+        } catch (_: Throwable) {
+            // ignore
+        }
     }
 
     private fun hashFile(path: Path): String? {
