@@ -2,10 +2,6 @@
 
 ## [Unreleased] 
 [1.1.1]
-### Fixed
-- Fixed duplicate and legacy report generation
-
-## [1.1.0]
 ### Added
 - Upgrade gradle to 8.13 and use `intellij.platform`
 - Ensured formatter execution and file mutations are fully compliant with IntelliJ PSI/VFS lifecycle guarantees.
@@ -19,6 +15,7 @@
 - Improved separation between planning, execution, and write phases.
 - Formatter selection and execution decisions are now explainable and auditable.
 - Improved cancellation behavior and responsiveness during long-running format operations.
+- Fixed duplicate and legacy report generation
 
 ### Removed
 -Removed all direct disk writes during formatting.
