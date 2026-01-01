@@ -113,6 +113,15 @@ dependencies {
 
 ```
 
+### Homebrew
+```shell
+brew tap aalsanie/humbaba
+brew install humbaba
+humbaba --help
+humbaba format .
+humbaba . --dry-run
+```
+
 License
 [license](LICENSE.md)
 
