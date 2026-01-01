@@ -47,7 +47,7 @@ Humbaba provides:
 
 ```kotlin
 plugins {
-    id("io.github.aalsanie.gradle") version "2.0.0"
+    id("io.github.aalsanie.humbaba") version "2.0.0"
 }
 
 humbaba {

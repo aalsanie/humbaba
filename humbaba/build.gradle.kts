@@ -24,7 +24,7 @@ gradlePlugin {
 
     plugins {
         create("humbaba") {
-            id = "io.github.aalsanie.gradle"
+            id = "io.github.aalsanie.humbaba"
             implementationClass = "io.github.aalsanie.gradle.HumbabaGradlePlugin"
             displayName = "Humbaba"
             description = "Polyglot formatting orchestrator and coverage reporting."
