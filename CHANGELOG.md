@@ -6,9 +6,6 @@
 - Added cli module
 - Added humbaba module: gradle plugin
 - Added intellij plugin module
-
-[1.1.1]
-### Added
 - Upgrade gradle to 8.13 and use `intellij.platform`
 - Ensured formatter execution and file mutations are fully compliant with IntelliJ PSI/VFS lifecycle guarantees.
 - Added a dry-run phase for “Format All Files” to compute coverage and eligibility without modifying files.
@@ -24,9 +21,10 @@
 - Fixed duplicate and legacy report generation
 
 ### Removed
--Removed all direct disk writes during formatting.
+- Remove all direct disk writes during formatting.
 
-## [1.0.1]
+---------
+## Pre 2.0.0 Releases
 ### Added
 - Deterministic and heuristic coverage scoring system
 - AI coverage scoring system
