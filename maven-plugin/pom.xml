@@ -4,13 +4,14 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>io.humbaba</groupId>
-  <artifactId>humbaba-maven-plugin</artifactId>
-  <version>0.1.0</version>
+  <groupId>io.github.aalsanie</groupId>
+  <artifactId>humbaba</artifactId>
+  <version>2.0.0</version>
   <packaging>maven-plugin</packaging>
 
   <name>Humbaba Maven Plugin</name>
   <description>Polyglot formatting orchestrator and coverage reporting.</description>
+  <url>https://github.com/aalsanie/humbaba</url>
 
   <properties>
     <maven.compiler.source>17</maven.compiler.source>
@@ -19,11 +20,22 @@
   </properties>
 
   <dependencies>
-    <!-- Core engine (publish this alongside the maven plugin) -->
     <dependency>
-      <groupId>io.humbaba</groupId>
-      <artifactId>core</artifactId>
+      <groupId>io.github.aalsanie</groupId>
+      <artifactId>humbaba-core</artifactId>
       <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.jetbrains.kotlin</groupId>
+      <artifactId>kotlin-stdlib</artifactId>
+      <version>1.9.23</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.jetbrains.kotlin</groupId>
+      <artifactId>kotlin-reflect</artifactId>
+      <version>1.9.23</version>
     </dependency>
 
     <dependency>
@@ -60,7 +72,78 @@
             </goals>
           </execution>
         </executions>
+        <configuration>
+          <goalPrefix>humbaba</goalPrefix>
+        </configuration>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals><goal>jar</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>3.11.2</version>
+        <executions>
+          <execution>
+            <id>attach-javadocs</id>
+            <goals><goal>jar</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-gpg-plugin</artifactId>
+        <version>3.2.7</version>
+        <executions>
+          <execution>
+            <id>sign-artifacts</id>
+            <phase>verify</phase>
+            <goals><goal>sign</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.sonatype.central</groupId>
+        <artifactId>central-publishing-maven-plugin</artifactId>
+        <version>0.9.0</version>
+        <extensions>true</extensions>
+        <configuration>
+          <publishingServerId>central</publishingServerId>
+          <autoPublish>true</autoPublish>
+        </configuration>
+      </plugin>
+
     </plugins>
   </build>
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>aalsanie</id>
+      <name>A.ALSANIE</name>
+      <email>a.aalsanie@outlook.com</email>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:git://github.com/aalsanie/humbaba.git</connection>
+    <developerConnection>scm:git:ssh://github.com/aalsanie/humbaba.git</developerConnection>
+    <url>https://github.com/aalsanie/humbaba</url>
+  </scm>
 </project>

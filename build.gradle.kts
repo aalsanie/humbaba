@@ -28,6 +28,7 @@ allprojects {
     repositories {
         mavenCentral()
         gradlePluginPortal()
+        mavenLocal()
     }
     configurations.all {
         resolutionStrategy {

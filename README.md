@@ -33,6 +33,8 @@ Humbaba provides:
 - (JS/TS/JSON/CSS/HTML/Markdown/YAML)
 
 ### Usage
+
+### Humbaba Intellij Plugin
 - Right-click in editor or Project view → Humbaba: Format All Files
 - Tools → Humbaba Formatter → Format All Files
   - Dry-Run & Preview
@@ -41,41 +43,74 @@ Humbaba provides:
 - Nothing is written until you explicitly confirm
 - Reports are generated under .humbaba/reports
 
-## Build & Run
+### Gradle Plugin (`io.humbaba.gradle`)
 
-Build
-```shell
-gradlew clean build
+```kotlin
+plugins {
+    id("io.humbaba.gradle") version "2.0.0"
+}
+
+humbaba {
+    // examples
+    dryRun.set(false)   // compute diffs + reports without leaving changes behind
+    preview.set(false)  // print diff previews
+    ai.set(false)       // experimental AI assistance (requires OPENAI_API_KEY)
+    yes.set(false)      // non-interactive consent prompts
+}
 ```
 
-Cli:
+Run
 ```shell
-gradlew :cli:build
-gradlew :cli:run --args="--help"
-gradlew :cli:run --args="format . --dry-run"
-## with ai
-export OPENAI_API_KEY="xxxxx"
-gradlew :cli:run --args="--help" --root . --ai
+gradlew humbabaFormat
 ```
 
-Intellij plugin
-```bash
-
-gradlew :intellij-plugin:build
-gradlew :intellij-plugin:runIde
+### Maven Plugin
+```xml
+<build>
+  <plugins>
+    <plugin>
+      <groupId>io.github.aalsanie</groupId>
+      <artifactId>humbaba</artifactId>
+      <version>2.0.0</version>
+      <executions>
+        <execution>
+          <goals>
+            <goal>format</goal>
+          </goals>
+        </execution>
+      </executions>
+      <configuration>
+        <!-- optional -->
+        <dryRun>false</dryRun>
+        <preview>false</preview>
+        <ai>false</ai>
+        <yes>false</yes>
+        <!-- root defaults to ${project.basedir} if not set -->
+        <!-- <root>${project.basedir}</root> -->
+      </configuration>
+    </plugin>
+  </plugins>
+</build>
 ```
 
-Gradle plugin
 ```shell
-gradlew :humbaba:build
-gradlew :humbaba:test
-gradlew humbabaFormat --stacktrace
+mvn -DskipTests humbaba:format
 ```
 
-Maven plugin
-```shell
-gradlew :humbaba-maven-plugin:build
-mvn humbaba:format -X
+### Humbaba core
+```kotlin
+dependencies {
+    implementation("io.github.aalsanie:humbaba-core:2.0.0")
+}
+```
+
+```xml
+<dependency>
+  <groupId>io.github.aalsanie</groupId>
+  <artifactId>humbaba-core</artifactId>
+  <version>2.0.0</version>
+</dependency>
+
 ```
 
 License

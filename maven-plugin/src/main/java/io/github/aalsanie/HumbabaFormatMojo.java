@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025-2026 | Humbaba is a safe, deterministic formatting orchestrator for polyglot repositories.
+ * Copyright © 2025-2026 | Humbaba is a formatting orchestrator for polyglot repositories.
  * Reports back format coverage percentage
  *
  * Author: @aalsanie
@@ -17,7 +17,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.humbaba.maven;
+package io.github.aalsanie;
 
 import io.humbaba.runner.HumbabaRunner;
 import io.humbaba.runner.RunOptions;
@@ -26,6 +26,7 @@ import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
+import kotlin.Unit;
 
 import java.nio.file.Path;
 
@@ -61,13 +62,9 @@ public class HumbabaFormatMojo extends AbstractMojo {
         RunResult res = new HumbabaRunner().formatAndReport(
                 rootPath,
                 new RunOptions(dryRun, preview, ai, yes),
-                msg -> getLog().info(msg),
+                msg -> { getLog().info(msg); return Unit.INSTANCE; },
                 () -> Thread.currentThread().isInterrupted()
         );
 
-        if (res.getFailedFiles() > 0) {
-            throw new MojoExecutionException("Humbaba failed on " + res.getFailedFiles() +
-                    " file(s). See reports under " + res.getReportsDir());
-        }
     }
 }

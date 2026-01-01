@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025-2026 | Humbaba is a safe, deterministic formatting orchestrator for polyglot repositories.
+ * Copyright © 2025-2026 | Humbaba is a formatting orchestrator for polyglot repositories.
  * Reports back format coverage percentage
  *
  * Author: @aalsanie
