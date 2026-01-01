@@ -120,6 +120,11 @@ brew install humbaba
 humbaba --help
 humbaba format .
 humbaba . --dry-run
+humbaba . --preview
+# enable AI (requires OPENAI_API_KEY)
+OPENAI_API_KEY=... humbaba . --ai
+# non-interactive (auto-consent prompts)
+humbaba . --yes
 ```
 
 License
