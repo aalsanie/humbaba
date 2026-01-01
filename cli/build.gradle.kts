@@ -3,7 +3,7 @@ plugins {
     application
 }
 
-group = "io.humbaba"
+group = "io.github.aalsanie"
 version = (findProperty("pluginVersion") as String?) ?: "0.1.0"
 
 repositories {
@@ -18,7 +18,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("io.humbaba.cli.MainKt")
+    mainClass.set("io.github.aalsanie.cli.MainKt")
 }
 
 tasks.test {

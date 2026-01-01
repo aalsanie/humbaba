@@ -19,9 +19,9 @@
  */
 package io.github.aalsanie;
 
-import io.humbaba.runner.HumbabaRunner;
-import io.humbaba.runner.RunOptions;
-import io.humbaba.runner.RunResult;
+import io.github.aalsanie.runner.HumbabaRunner;
+import io.github.aalsanie.runner.RunOptions;
+import io.github.aalsanie.runner.RunResult;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.Mojo;

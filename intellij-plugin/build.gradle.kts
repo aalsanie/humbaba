@@ -22,8 +22,8 @@ plugins {
     id("com.diffplug.spotless")
 }
 
-group = "io.humbaba"
-version = "2.0.0"
+group = "io.github.aalsanie"
+version = "2.0.1"
 
 repositories {
     mavenCentral()

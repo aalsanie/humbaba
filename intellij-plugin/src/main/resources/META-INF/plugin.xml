@@ -1,5 +1,5 @@
 <idea-plugin>
-    <id>io.humbaba.formatter</id>
+    <id>io.github.aalsanie.formatter</id>
     <name>Humbaba</name>
     <vendor email="a.aalsanie@outlook.com" url="https://plugins.jetbrains.com">Humbaba Formatter</vendor>
 
@@ -12,12 +12,12 @@
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <applicationService serviceImplementation="io.humbaba.platform.settings.FormatMasterSettingsService"/>
-        <applicationService serviceImplementation="io.humbaba.platform.IntellijConsentStore"/>
-        <applicationConfigurable instance="io.humbaba.platform.settings.FormatMasterConfigurable"/>
+        <applicationService serviceImplementation="io.github.aalsanie.platform.settings.FormatMasterSettingsService"/>
+        <applicationService serviceImplementation="io.github.aalsanie.platform.IntellijConsentStore"/>
+        <applicationConfigurable instance="io.github.aalsanie.platform.settings.FormatMasterConfigurable"/>
         <notificationGroup id="Humbaba Formatter" displayType="BALLOON" isLogByDefault="false"/>
         <toolWindow id="Humbaba Formatter"
-                    factoryClass="io.humbaba.platform.toolwindow.FormatMasterToolWindowFactory"
+                    factoryClass="io.github.aalsanie.platform.toolwindow.FormatMasterToolWindowFactory"
                     anchor="right"
                     icon="/icons/humbaba.svg"
                     canCloseContents="false"/>
@@ -27,7 +27,7 @@
     <group id="HumbabaFormatter.ToolsGroup" text="Humbaba Formatter" popup="true">
         <add-to-group group-id="ToolsMenu" anchor="last"/>
         <action id="HumbabaFormatter.FormatAll"
-                class="io.humbaba.platform.action.FormatAllFilesAction"
+                class="io.github.aalsanie.platform.action.FormatAllFilesAction"
                 text="Humbaba: Format All Files"
                 description="Format all eligible files in project content using native formatting or safe external formatters"
                 icon="/icons/humbaba.svg"/>
@@ -35,7 +35,7 @@
 
 
     <action id="HumbabaFormatter.FormatAll.Popup"
-            class="io.humbaba.platform.action.FormatAllFilesAction"
+            class="io.github.aalsanie.platform.action.FormatAllFilesAction"
             text="Humbaba: Format All Files"
             description="Format all eligible files in project content using native formatting or safe external formatters"
             icon="/icons/humbaba.svg">

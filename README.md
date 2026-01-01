@@ -43,11 +43,11 @@ Humbaba provides:
 - Nothing is written until you explicitly confirm
 - Reports are generated under .humbaba/reports
 
-### Gradle Plugin (`io.humbaba.gradle`)
+### Gradle Plugin (`io.github.aalsanie.gradle`)
 
 ```kotlin
 plugins {
-    id("io.humbaba.gradle") version "2.0.0"
+    id("io.github.aalsanie.gradle") version "2.0.0"
 }
 
 humbaba {

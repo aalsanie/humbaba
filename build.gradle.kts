@@ -22,7 +22,7 @@ plugins {
 }
 
 allprojects {
-    group = "io.humbaba"
+    group = "io.github.aalsanie"
     version = (findProperty("pluginVersion") as String?) ?: "0.1.0"
 
     repositories {
