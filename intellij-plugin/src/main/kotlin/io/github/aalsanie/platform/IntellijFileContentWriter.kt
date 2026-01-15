@@ -25,6 +25,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.ThrowableComputable
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
 import io.github.aalsanie.domains.ports.FileContentWriter
@@ -59,7 +60,7 @@ class IntellijFileContentWriter(
         return WriteCommandAction.runWriteCommandAction(
             project,
             ThrowableComputable<Boolean, RuntimeException> {
-                doc.setText(newText)
+                doc.setText(StringUtil.convertLineSeparators(newText))
                 val pdm = PsiDocumentManager.getInstance(project)
                 pdm.commitDocument(doc)
                 pdm.doPostponedOperationsAndUnblockDocument(doc)

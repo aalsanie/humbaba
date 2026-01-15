@@ -28,7 +28,29 @@ class CliFileClassifier : FileClassifier {
     override fun classify(filePath: String): Pair<String, String?> {
         val p = Path.of(filePath)
         val ext = p.extension.lowercase()
-        return ext to null
+        if (ext.isNotBlank()) return ext to null
+
+        // Extensionless executable scripts (e.g. `./script`) are common; infer from shebang.
+        val inferred = detectShebangExtension(p)
+        return (inferred ?: ext) to null
+    }
+
+    private fun detectShebangExtension(p: Path): String? {
+        return try {
+            if (!Files.exists(p) || Files.isDirectory(p)) return null
+            val firstLine = Files.newBufferedReader(p).use { it.readLine() } ?: return null
+            if (!firstLine.startsWith("#!")) return null
+
+            val shebang = firstLine.lowercase()
+            when {
+                shebang.contains("bash") || shebang.contains("/sh") -> "sh"
+                shebang.contains("python") -> "py"
+                shebang.contains("node") -> "js"
+                else -> null
+            }
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     override fun sample(filePath: String, maxChars: Int): String? {

@@ -26,12 +26,17 @@ import kotlin.streams.toList
 
 object CliFileCollector {
     private val eligibleExt = setOf(
-        "py", "c", "cc", "cpp", "cxx", "h", "hpp", "hh", "hxx",
-        "sh", "bash", "go", "lua",
-        "js", "jsx", "ts", "tsx", "json", "css", "html", "htm", "md",
+        // Supported languages & configs
+        "java", "kt", "kts", "xml",
+        "py",
+        "go",
+        "c", "cc", "cpp", "cxx", "h", "hpp", "hh", "hxx",
+        "sh", "bash",
+        "lua",
+        "js", "mjs", "cjs", "jsx", "ts", "tsx",
+        "json", "jsonc",
+        "css", "html", "htm", "md", "mdx",
         "yaml", "yml",
-        "java", "kt", "kts",
-        "xml",
     )
 
     fun collect(target: Path): List<Path> {
@@ -45,7 +50,6 @@ object CliFileCollector {
 
         return Files.walk(root)
             .filter { Files.isRegularFile(it) }
-            .filter { it.fileName.toString().startsWith(".").not() }
             .filter { it.extension.lowercase() in eligibleExt }
             .toList()
             .sorted()

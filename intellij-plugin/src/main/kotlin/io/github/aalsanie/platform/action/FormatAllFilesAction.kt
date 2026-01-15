@@ -85,8 +85,8 @@ class FormatAllFilesAction : AnAction() {
                 Messages.showOkCancelDialog(
                     project,
                     "AI formatting is EXPERIMENTAL and may change semantics.\n\n" +
-                        "Only enable it if you have backups / version control, and review diffs.\n\n" +
-                        "Proceed?",
+                            "Only enable it if you have backups / version control, and review diffs.\n\n" +
+                            "Proceed?",
                     "Enable AI Formatting (Experimental)",
                     "Proceed",
                     "Cancel",
@@ -104,10 +104,10 @@ class FormatAllFilesAction : AnAction() {
                     collectEligibleProjectFiles(project) { ext ->
                         val lower = ext.lowercase()
                         lower.isNotBlank() && (
-                            registry.findByExtension(lower).isNotEmpty() ||
-                                lower in NATIVE_ONLY ||
-                                lower in NO_OP_BUT_SUCCESS
-                        )
+                                registry.findByExtension(lower).isNotEmpty() ||
+                                        lower in NATIVE_PREFERRED ||
+                                        lower in NO_OP_BUT_SUCCESS
+                                )
                     }
 
                 if (eligible.isEmpty()) {
@@ -402,7 +402,7 @@ class FormatAllFilesAction : AnAction() {
 
     private companion object {
         private const val MAX_HASH_BYTES: Long = 5_000_000
-        private val NATIVE_ONLY = setOf("xml", "java", "kt", "kts", "json")
-        private val NO_OP_BUT_SUCCESS = setOf("js", "jsx", "ts", "tsx", "css", "cmd", "bat")
+        private val NATIVE_PREFERRED = setOf("xml", "java", "kt", "kts")
+        private val NO_OP_BUT_SUCCESS = setOf("cmd", "bat")
     }
 }

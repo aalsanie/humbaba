@@ -47,9 +47,9 @@ class DefaultFormatterRegistry : FormatterRegistry {
         FormatterDefinition(
             id = "prettier",
             displayName = "Prettier",
-            supportedExtensions = setOf("js", "ts", "jsx", "tsx", "json", "css", "html", "md", "yaml", "yml"),
+            supportedExtensions = setOf("js", "mjs", "cjs", "ts", "jsx", "tsx", "json", "jsonc", "css", "html", "htm", "md", "mdx", "yaml", "yml"),
             installStrategies = setOf(InstallStrategyType.NPM),
-            allowedArgs = setOf("--write", "--log-level", "warn"),
+            allowedArgs = setOf("--write", "--log-level", "warn", "--no-config", "--no-editorconfig", "--ignore-path", "--parser"),
             commandTemplate = listOf("{exe}", "{args}", "{file}"),
         )
 

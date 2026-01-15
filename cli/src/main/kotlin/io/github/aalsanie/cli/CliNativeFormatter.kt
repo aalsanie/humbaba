@@ -28,5 +28,5 @@ import io.github.aalsanie.domains.ports.NativeFormatter
  * Real formatting should be done via external formatters in the CLI (ktlint, prettier, etc.).
  */
 class CliNativeFormatter : NativeFormatter {
-    override fun tryFormat(filePath: String): Boolean = true
+    override fun tryFormat(filePath: String): Boolean = false
 }

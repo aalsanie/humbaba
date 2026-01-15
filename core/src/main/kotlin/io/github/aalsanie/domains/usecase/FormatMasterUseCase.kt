@@ -76,8 +76,8 @@ class FormatMasterUseCase(
 
         // ---------------- POLICIES ----------------
 
-        val nativeOnly = setOf("xml", "java", "kt", "kts", "json")
-        val noOpButSuccess = setOf("js", "jsx", "ts", "tsx", "css", "cmd", "bat")
+        val nativeOnly = setOf("xml", "java", "kt", "kts")
+        val noOpButSuccess = setOf("cmd", "bat")
         val enforceExternalFirst =
             setOf(
                 "yaml",
@@ -136,8 +136,13 @@ class FormatMasterUseCase(
         val afterExternal = classifier.sample(request.filePath, maxChars = 200_000) ?: ""
         val externalChanged = original != afterExternal && afterExternal.isNotBlank()
 
-        if (externalApplied && externalChanged) {
-            steps += FormatStep(FormatStepType.DONE, "Formatted using external formatter.", ok = true)
+        if (externalApplied) {
+            steps +=
+                if (externalChanged) {
+                    FormatStep(FormatStepType.DONE, "Formatted using external formatter.", ok = true)
+                } else {
+                    FormatStep(FormatStepType.DONE, "No change detected (already formatted by external formatter).", ok = true)
+                }
             return FormatResult(steps, null, emptyList())
         }
 
@@ -152,9 +157,8 @@ class FormatMasterUseCase(
 
         val nativeOk = nativeFormatter.tryFormat(request.filePath)
         val afterNative = classifier.sample(request.filePath, maxChars = 200_000) ?: ""
-        val nativeChanged = original != afterNative && afterNative.isNotBlank()
 
-        if (nativeOk && nativeChanged) {
+        if (nativeOk) {
             steps +=
                 FormatStep(
                     FormatStepType.CHOOSE,
@@ -205,7 +209,7 @@ class FormatMasterUseCase(
 
         // ---------------- FAILURE ----------------
 
-        errors += "File could not be formatted (no formatter produced a change)."
+        errors += "File could not be formatted (no formatter succeeded)."
         steps +=
             FormatStep(
                 FormatStepType.DONE,
@@ -231,49 +235,78 @@ class FormatMasterUseCase(
             return false
         }
 
-        val chosen =
+        val ordered =
             if (forceBest) {
-                chooseBestKnown(request.extension, candidates)
+                val best = chooseBestKnown(request.extension, candidates)
+                listOf(best) + candidates.filter { it.id != best.id }
             } else {
-                candidates.first()
+                candidates
             }
 
-        steps +=
-            FormatStep(
-                FormatStepType.AI_RECOMMEND,
-                "Selected formatter: ${chosen.displayName}",
-            )
+        for (chosen in ordered) {
+            steps +=
+                FormatStep(
+                    FormatStepType.AI_RECOMMEND,
+                    "Selected formatter: ${chosen.displayName}",
+                    ok = true,
+                )
 
-        val plan = defaultPlanFor(chosen.id, request.extension) ?: return false
+            val plan = defaultPlanFor(chosen.id, request.extension) ?: continue
 
-        val validation = safety.validate(chosen, plan)
-        if (!validation.ok) return false
+            val validation = safety.validate(chosen, plan)
+            if (!validation.ok) continue
 
-        if (!request.allowAutoInstall && !consent.isFormatterTrusted(chosen.id)) {
-            if (!consentPrompter.askTrustFormatter(chosen.id, chosen.displayName)) return false
-            consent.trustFormatter(chosen.id)
+            if (!request.allowAutoInstall && !consent.isFormatterTrusted(chosen.id)) {
+                if (!consentPrompter.askTrustFormatter(chosen.id, chosen.displayName)) continue
+                consent.trustFormatter(chosen.id)
+            }
+
+            val install =
+                installer.ensureInstalled(
+                    chosen,
+                    validation.sanitizedVersion ?: plan.version,
+                    plan.installStrategy,
+                )
+
+            if (!install.ok || install.executable == null) continue
+
+            val args = validation.sanitizedArgs.ifEmpty { plan.runArgs }
+
+            steps +=
+                FormatStep(
+                    FormatStepType.RUN_EXTERNAL_FORMATTER,
+                    "Running ${chosen.displayName}…",
+                    ok = true,
+                )
+
+            val run =
+                runner.run(
+                    def = chosen,
+                    executable = install.executable,
+                    args = args,
+                    filePath = request.filePath,
+                )
+
+            if (run.ok) return true
+
+            val details =
+                buildString {
+                    append("Formatter ${chosen.displayName} failed (exitCode=${run.exitCode}).")
+                    if (run.stderr.isNotBlank()) {
+                        append(" stderr=")
+                        append(run.stderr.trim().take(400))
+                    }
+                }
+
+            steps +=
+                FormatStep(
+                    FormatStepType.RUN_EXTERNAL_FORMATTER,
+                    details,
+                    ok = false,
+                )
         }
 
-        val install =
-            installer.ensureInstalled(
-                chosen,
-                validation.sanitizedVersion ?: plan.version,
-                plan.installStrategy,
-            )
-
-        if (!install.ok || install.executable == null) return false
-
-        val args = validation.sanitizedArgs.ifEmpty { plan.runArgs }
-
-        val run =
-            runner.run(
-                def = chosen,
-                executable = install.executable,
-                args = args,
-                filePath = request.filePath,
-            )
-
-        return run.ok
+        return false
     }
 
     private fun chooseBestKnown(

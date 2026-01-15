@@ -292,7 +292,7 @@ class HumbabaRunner {
 
     private companion object {
         private const val MAX_HASH_BYTES: Long = 5_000_000
-        private val NATIVE_ONLY = setOf("xml", "java", "kt", "kts", "json")
-        private val NO_OP_BUT_SUCCESS = setOf("js", "jsx", "ts", "tsx", "css", "cmd", "bat")
+        private val NATIVE_ONLY = setOf("xml", "java", "kt", "kts")
+        private val NO_OP_BUT_SUCCESS = setOf("cmd", "bat")
     }
 }
